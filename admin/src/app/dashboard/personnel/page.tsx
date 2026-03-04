@@ -127,7 +127,7 @@ export default function PersonnelList() {
               <Users className="w-5 h-5" />
               Personnel List
             </a>
-            <a href="#" className="flex items-center gap-3 px-4 py-3.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 rounded-xl font-medium transition-all group">
+            <a href="/dashboard/missions" className="flex items-center gap-3 px-4 py-3.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 rounded-xl font-medium transition-all group">
               <Map className="w-5 h-5 group-hover:text-primary transition-colors" />
               Missions & Routes
             </a>
