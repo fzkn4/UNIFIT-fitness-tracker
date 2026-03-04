@@ -55,6 +55,33 @@ export default function HomeScreen({ navigation }: any) {
           </LinearGradient>
         </TouchableOpacity>
 
+        {/* Assigned Routines Card */}
+        <TouchableOpacity 
+          style={[styles.recordCardTouch, { shadowColor: '#8b5cf6' }]} 
+          onPress={() => navigation.navigate('Routines')}
+          activeOpacity={0.9}
+        >
+          <LinearGradient
+            colors={['#7c3aed', '#8b5cf6']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.recordCard}
+          >
+            <View style={styles.recordCardInner}>
+              <View style={styles.recordTextContainer}>
+                <Text style={styles.recordTitle}>My Routines</Text>
+                <Text style={styles.recordSubtitle}>View and start missions assigned by your admin.</Text>
+              </View>
+              <View style={styles.playButton}>
+                <Ionicons name="list" size={28} color="#7c3aed" />
+              </View>
+            </View>
+            
+            {/* Decorative Pattern in background */}
+            <Ionicons name="compass" size={140} color="rgba(255,255,255,0.1)" style={styles.cardBgIcon} />
+          </LinearGradient>
+        </TouchableOpacity>
+
         {/* Weekly Stats Summary */}
         <View style={styles.statsRow}>
           <View style={styles.statBox}>

@@ -8,6 +8,7 @@ import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import RunTrackerScreen from './src/screens/RunTrackerScreen';
+import RoutinesScreen from './src/screens/RoutinesScreen';
 import { colors } from './src/theme/colors';
 
 const Stack = createNativeStackNavigator();
@@ -47,6 +48,11 @@ export default function App() {
           <Stack.Screen 
             name="RunTracker" 
             component={RunTrackerScreen} 
+            options={{ headerShown: false }} 
+          />
+          <Stack.Screen 
+            name="Routines" 
+            component={RoutinesScreen} 
             options={{ headerShown: false }} 
           />
         </Stack.Navigator>
