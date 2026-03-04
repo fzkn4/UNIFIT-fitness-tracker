@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, Dimensions, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, Dimensions, ActivityIndicator, Alert } from 'react-native';
 import { colors } from '../theme/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { auth, realtimeDb } from '../lib/firebase';
 import { ref, onValue } from 'firebase/database';
+import { signOut } from 'firebase/auth';
 
 const { width } = Dimensions.get('window');
 
@@ -15,6 +16,31 @@ export default function HomeScreen({ navigation }: any) {
   const [loadingRuns, setLoadingRuns] = useState(true);
 
   const currentDate = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+
+  const handleLogout = () => {
+    Alert.alert(
+      "Sign Out",
+      "Are you sure you want to sign out?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+        {
+          text: "Sign Out",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await signOut(auth);
+              navigation.replace('Login');
+            } catch (error) {
+              console.error("Error signing out:", error);
+            }
+          }
+        }
+      ]
+    );
+  };
 
   useEffect(() => {
     const user = auth.currentUser;
@@ -108,11 +134,16 @@ export default function HomeScreen({ navigation }: any) {
             <Text style={styles.greeting}>Ready to move?</Text>
             <Text style={styles.date}>{currentDate}</Text>
           </View>
-          <TouchableOpacity style={styles.profileBtn}>
-            <View style={styles.profileAvatar}>
-              <Text style={styles.profileText}>{initials}</Text>
-            </View>
-          </TouchableOpacity>
+          <View style={styles.headerRight}>
+            <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
+              <Ionicons name="log-out-outline" size={24} color="#ef4444" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.profileBtn}>
+              <View style={styles.profileAvatar}>
+                <Text style={styles.profileText}>{initials}</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Start Run Action Card */}
@@ -283,6 +314,21 @@ const styles = StyleSheet.create({
     color: colors.mutedForeground,
     marginTop: 4,
     fontWeight: '500',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  logoutBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   profileBtn: {
     shadowColor: colors.primary,
