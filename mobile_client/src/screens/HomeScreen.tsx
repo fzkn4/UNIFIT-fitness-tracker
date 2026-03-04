@@ -6,10 +6,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { auth, realtimeDb } from '../lib/firebase';
 import { ref, onValue, get } from 'firebase/database';
 import { signOut } from 'firebase/auth';
+import { useNetInfo } from '@react-native-community/netinfo';
+import { syncOfflineRuns } from '../lib/OfflineSyncManager';
 
 const { width } = Dimensions.get('window');
 
 export default function HomeScreen({ navigation }: any) {
+  const netInfo = useNetInfo();
+  
   const [userName, setUserName] = useState('User');
   const [initials, setInitials] = useState('U');
   const [runs, setRuns] = useState<any[]>([]);
@@ -43,7 +47,19 @@ export default function HomeScreen({ navigation }: any) {
     );
   };
 
+  // Background Sync when network returns
+  useEffect(() => {
+    if (netInfo.isConnected && netInfo.isInternetReachable !== false) {
+      syncOfflineRuns();
+    }
+  }, [netInfo.isConnected, netInfo.isInternetReachable]);
+
   const onRefresh = useCallback(async () => {
+    if (!netInfo.isConnected) {
+      Alert.alert("Offline", "You cannot manually refresh while offline. Your new runs are safely saved locally.");
+      return;
+    }
+
     setRefreshing(true);
     const user = auth.currentUser;
     if (user) {
@@ -168,6 +184,16 @@ export default function HomeScreen({ navigation }: any) {
           />
         }
       >
+        {/* Offline Banner */}
+        {netInfo.isConnected === false && (
+          <View style={styles.offlineBanner}>
+            <Ionicons name="cloud-offline" size={16} color="#f59e0b" />
+            <Text style={styles.offlineBannerText}>
+              Offline Mode. Runs will be saved locally.
+            </Text>
+          </View>
+        )}
+
         {/* Header Section */}
         <View style={styles.header}>
           <View>
@@ -323,6 +349,24 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#0a0f1c',
+  },
+  offlineBanner: {
+    backgroundColor: 'rgba(245,158,11,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(245,158,11,0.3)',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 20,
+    marginTop: 10,
+  },
+  offlineBannerText: {
+    color: '#f59e0b',
+    fontSize: 13,
+    fontWeight: '600',
   },
   bgGlowTop: {
     position: 'absolute',

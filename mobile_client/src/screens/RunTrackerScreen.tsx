@@ -7,6 +7,8 @@ import { colors } from '../theme/colors';
 import { LinearGradient } from 'expo-linear-gradient';
 import { auth, realtimeDb } from '../lib/firebase';
 import { ref, push, set } from 'firebase/database';
+import { useNetInfo } from '@react-native-community/netinfo';
+import { saveRunOffline } from '../lib/OfflineSyncManager';
 
 // Haversine formula to calculate distance between two lat/lon points in meters
 function getDistanceFromLatLonInMeters(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -25,6 +27,8 @@ function getDistanceFromLatLonInMeters(lat1: number, lon1: number, lat2: number,
 const { width, height } = Dimensions.get('window');
 
 export default function RunTrackerScreen({ route, navigation }: any) {
+  const netInfo = useNetInfo();
+  
   // Extract routine info if navigated from RoutinesScreen
   const missionId = route?.params?.missionId || null;
   const missionTitle = route?.params?.missionTitle || null;
@@ -111,30 +115,36 @@ export default function RunTrackerScreen({ route, navigation }: any) {
     const paceSeconds = Math.floor(averagePaceSecondsPerKm % 60);
     const finalPaceStr = paceMinutes > 0 ? `${paceMinutes}'${paceSeconds.toString().padStart(2, '0')}"` : '--';
 
-
     if (user) {
-      try {
-        const runsRef = ref(realtimeDb, 'runs');
-        const newRunRef = push(runsRef);
-        const payload = {
-          userId: user.uid,
-          userName: user.displayName || 'Anonymous personnel',
-          distance: finalDist, // meters
-          duration: finalDuration,  // seconds
-          averagePace: finalPaceStr, // mm'ss"
-          route: routeCoordinates,
-          timestamp: Date.now(),
-          // Link run to specific mission if applicable
-          missionId: missionId,
-          missionTitle: missionTitle
-        };
-        await set(newRunRef, payload);
-      } catch (err) {
-        console.error("Failed to save run to Firebase:", err);
+      const payload = {
+        userId: user.uid,
+        userName: user.displayName || 'Anonymous personnel',
+        distance: finalDist, // meters
+        duration: finalDuration,  // seconds
+        averagePace: finalPaceStr, // mm'ss"
+        route: routeCoordinates,
+        timestamp: Date.now(),
+        missionId: missionId,
+        missionTitle: missionTitle
+      };
+
+      if (netInfo.isConnected) {
+        try {
+          const runsRef = ref(realtimeDb, 'runs');
+          const newRunRef = push(runsRef);
+          await set(newRunRef, payload);
+          Alert.alert('Run Saved!', `Distance: ${(finalDist/1000).toFixed(2)}km\nTime: ${formatTime(finalDuration)}`);
+        } catch (err) {
+          console.error("Failed to save run to Firebase:", err);
+          Alert.alert('Error', 'Failed to save run. Please check your connection.');
+        }
+      } else {
+        // Offline Saving
+        await saveRunOffline(payload);
+        Alert.alert('Run Saved Offline!', `Distance: ${(finalDist/1000).toFixed(2)}km\nTime: ${formatTime(finalDuration)}\n\nYour run details will sync automatically when you reconnect.`);
       }
     }
 
-    Alert.alert('Run Saved!', `Distance: ${(finalDist/1000).toFixed(2)}km\nTime: ${formatTime(finalDuration)}`);
     navigation.goBack();
   };
 
@@ -192,7 +202,6 @@ export default function RunTrackerScreen({ route, navigation }: any) {
         </View>
       )}
 
-      {/* Top Bar with Back Button */}
       <View style={styles.topBar}>
         <TouchableOpacity 
           style={styles.backBtn} 
@@ -201,9 +210,11 @@ export default function RunTrackerScreen({ route, navigation }: any) {
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.topHeader}>Active Run</Text>
-        <View style={styles.gpsIndicator}>
-          <View style={styles.gpsDot} />
-          <Text style={styles.gpsText}>GPS</Text>
+        <View style={netInfo.isConnected ? styles.gpsIndicator : styles.offlineIndicator}>
+          <View style={netInfo.isConnected ? styles.gpsDot : styles.offlineDot} />
+          <Text style={netInfo.isConnected ? styles.gpsText : styles.offlineText}>
+            {netInfo.isConnected ? 'ONLINE' : 'OFFLINE'}
+          </Text>
         </View>
       </View>
 
@@ -376,6 +387,28 @@ const styles = StyleSheet.create({
   },
   gpsText: {
     color: '#10b981',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  offlineIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(245,158,11,0.15)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(245,158,11,0.3)',
+  },
+  offlineDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#f59e0b',
+    marginRight: 6,
+  },
+  offlineText: {
+    color: '#f59e0b',
     fontSize: 12,
     fontWeight: 'bold',
   },

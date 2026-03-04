@@ -5,6 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { auth, realtimeDb } from '../lib/firebase';
 import { ref, onValue, get } from 'firebase/database';
+import { useNetInfo } from '@react-native-community/netinfo';
+import { cacheRoutinesData, getCachedRoutinesData, getOfflineRuns } from '../lib/OfflineSyncManager';
 
 const { width } = Dimensions.get('window');
 
@@ -24,6 +26,8 @@ interface Mission {
 }
 
 export default function RoutinesScreen({ navigation }: any) {
+  const netInfo = useNetInfo();
+  
   const [missions, setMissions] = useState<Mission[]>([]);
   const [userRuns, setUserRuns] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,7 +39,23 @@ export default function RoutinesScreen({ navigation }: any) {
       setLoading(false);
       return;
     }
+    
+    // OFFLINE LOGIC
+    if (netInfo.isConnected === false) {
+      setLoading(true);
+      getCachedRoutinesData().then(async (cachedData) => {
+        if (cachedData) {
+          setMissions(cachedData.missions);
+          const pendingRuns = await getOfflineRuns();
+          const allRuns = [...cachedData.userRuns, ...pendingRuns];
+          setUserRuns(allRuns);
+        }
+        setLoading(false);
+      });
+      return;
+    }
 
+    // ONLINE LOGIC
     const missionsRef = ref(realtimeDb, 'missions');
     const unsubscribeMissions = onValue(missionsRef, (snapshot) => {
       if (snapshot.exists()) {
@@ -80,7 +100,14 @@ export default function RoutinesScreen({ navigation }: any) {
       unsubscribeMissions();
       unsubscribeRuns();
     };
-  }, []);
+  }, [netInfo.isConnected]);
+
+  // Cache data whenever it updates and we are online
+  useEffect(() => {
+    if (netInfo.isConnected && missions.length > 0) {
+      cacheRoutinesData(missions, userRuns);
+    }
+  }, [missions, userRuns, netInfo.isConnected]);
 
   const formatDate = (dateString: string) => {
     const d = new Date(dateString);
@@ -128,9 +155,19 @@ export default function RoutinesScreen({ navigation }: any) {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await fetchMissionData();
+    if (netInfo.isConnected === false) {
+      const cachedData = await getCachedRoutinesData();
+      if (cachedData) {
+        setMissions(cachedData.missions);
+        const pendingRuns = await getOfflineRuns();
+        const allRuns = [...cachedData.userRuns, ...pendingRuns];
+        setUserRuns(allRuns);
+      }
+    } else {
+      await fetchMissionData();
+    }
     setRefreshing(false);
-  }, []);
+  }, [netInfo.isConnected]);
 
   return (
     <View style={styles.container}>
