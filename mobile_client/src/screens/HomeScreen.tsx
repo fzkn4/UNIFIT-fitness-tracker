@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, Dimensions, ActivityIndicator, Alert } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, Dimensions, ActivityIndicator, Alert, RefreshControl } from 'react-native';
 import { colors } from '../theme/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { auth, realtimeDb } from '../lib/firebase';
-import { ref, onValue } from 'firebase/database';
+import { ref, onValue, get } from 'firebase/database';
 import { signOut } from 'firebase/auth';
 
 const { width } = Dimensions.get('window');
@@ -14,6 +14,7 @@ export default function HomeScreen({ navigation }: any) {
   const [initials, setInitials] = useState('U');
   const [runs, setRuns] = useState<any[]>([]);
   const [loadingRuns, setLoadingRuns] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   const currentDate = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
 
@@ -41,6 +42,34 @@ export default function HomeScreen({ navigation }: any) {
       ]
     );
   };
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    const user = auth.currentUser;
+    if (user) {
+      try {
+        const runsRef = ref(realtimeDb, 'runs');
+        const snapshot = await get(runsRef);
+        if (snapshot.exists()) {
+          const data = snapshot.val();
+          const userRuns: any[] = Object.keys(data)
+            .map(key => ({
+              id: key,
+              ...data[key]
+            }))
+            .filter(run => run.userId === user.uid);
+          
+          userRuns.sort((a, b) => b.timestamp - a.timestamp);
+          setRuns(userRuns);
+        } else {
+          setRuns([]);
+        }
+      } catch (error) {
+        console.error("Error refreshing runs:", error);
+      }
+    }
+    setRefreshing(false);
+  }, []);
 
   useEffect(() => {
     const user = auth.currentUser;
@@ -127,7 +156,18 @@ export default function HomeScreen({ navigation }: any) {
       {/* Background Gradients */}
       <View style={styles.bgGlowTop} />
       
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl 
+            refreshing={refreshing} 
+            onRefresh={onRefresh} 
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
+      >
         {/* Header Section */}
         <View style={styles.header}>
           <View>
