@@ -24,19 +24,98 @@ import { ref, onValue } from 'firebase/database';
 
 export default function Dashboard() {
   const [personnelCount, setPersonnelCount] = useState(0);
+  const [totalDistance, setTotalDistance] = useState(0);
+  const [avgPace, setAvgPace] = useState('--');
+  const [complianceRate, setComplianceRate] = useState(0);
+  const [recentRuns, setRecentRuns] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
         // Fetch personnel linked to this admin
         const usersRef = ref(realtimeDb, 'users');
-        onValue(usersRef, (snapshot) => {
-          if (snapshot.exists()) {
-            const usersData = snapshot.val();
-            const count = Object.values(usersData).filter(
-              (u: any) => u.role === 'user' && u.adminId === user.uid
-            ).length;
-            setPersonnelCount(count);
+        const runsRef = ref(realtimeDb, 'runs');
+
+        onValue(usersRef, (usersSnapshot) => {
+          if (usersSnapshot.exists()) {
+            const usersData = usersSnapshot.val();
+            const adminPersonnel = Object.keys(usersData)
+              .map(key => ({ id: key, ...usersData[key] }))
+              .filter((u: any) => u.role === 'user' && u.adminId === user.uid);
+            
+            setPersonnelCount(adminPersonnel.length);
+
+            // Fetch Runs
+            onValue(runsRef, (runsSnapshot) => {
+              if (runsSnapshot.exists()) {
+                const runsData = runsSnapshot.val();
+                let allRuns = Object.keys(runsData).map(key => ({ id: key, ...runsData[key] }));
+
+                // Filter runs by personnel and last 7 days for distance
+                const personnelIds = adminPersonnel.map(p => p.id);
+                const filteredRuns = allRuns.filter((run: any) => personnelIds.includes(run.userId));
+                
+                const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+                const weekRuns = filteredRuns.filter((run: any) => run.timestamp > sevenDaysAgo);
+
+                // 1. Total Distance (Week)
+                const distanceSum = weekRuns.reduce((sum, run) => sum + (run.distance || 0), 0);
+                setTotalDistance(distanceSum / 1000); // in km
+
+                // 2. Average Pace (All time)
+                const totalDistAll = filteredRuns.reduce((sum, run) => sum + (run.distance || 0), 0);
+                const totalDurAll = filteredRuns.reduce((sum, run) => sum + (run.duration || 0), 0);
+                if (totalDistAll > 0) {
+                  const paceSecs = totalDurAll / (totalDistAll / 1000);
+                  const pMins = Math.floor(paceSecs / 60);
+                  const pSecs = Math.floor(paceSecs % 60).toString().padStart(2, '0');
+                  setAvgPace(`${pMins}'${pSecs}"`);
+                } else {
+                  setAvgPace('--');
+                }
+
+                // 3. Compliance Rate (All time)
+                if (adminPersonnel.length > 0) {
+                  const uniqueRunners = new Set(filteredRuns.map((r: any) => r.userId));
+                  setComplianceRate(Math.round((uniqueRunners.size / adminPersonnel.length) * 100));
+                } else {
+                  setComplianceRate(0);
+                }
+
+                // 4. Transform Recent Runs for Table
+                const sortedRuns = filteredRuns.sort((a: any, b: any) => b.timestamp - a.timestamp).slice(0, 10);
+                const tableData = sortedRuns.map(run => {
+                  const u = adminPersonnel.find(p => p.id === run.userId);
+                  const distKm = (run.distance / 1000);
+                  let currPaceSecs = distKm > 0 ? (run.duration / distKm) : 0;
+                  const currPMins = Math.floor(currPaceSecs / 60);
+                  const currPSecs = Math.floor(currPaceSecs % 60).toString().padStart(2, '0');
+                  const durationMins = Math.floor(run.duration / 60);
+                  const durationSecs = Math.floor(run.duration % 60).toString().padStart(2, '0');
+
+                  return {
+                    id: run.id,
+                    name: u?.fullName || 'Unknown User',
+                    avatar: u?.fullName ? u.fullName.substring(0, 2).toUpperCase() : '??',
+                    time: new Date(run.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+                    distance: `${distKm.toFixed(2)} km`,
+                    pace: `${currPMins}'${currPSecs}"/km`,
+                    duration: `${durationMins}:${durationSecs}`
+                  };
+                });
+                
+                setRecentRuns(tableData);
+              } else {
+                setTotalDistance(0);
+                setAvgPace('--');
+                setComplianceRate(0);
+                setRecentRuns([]);
+              }
+              setLoading(false);
+            });
+          } else {
+            setLoading(false);
           }
         });
       } else {
@@ -154,7 +233,9 @@ export default function Dashboard() {
               </div>
               <span className="text-sm font-medium text-slate-400">Total Distance (Week)</span>
               <div className="mt-2 flex items-baseline gap-2">
-                <span className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-white to-primary">1,452</span>
+                <span className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-white to-primary">
+                  {loading ? '...' : totalDistance.toFixed(1)}
+                </span>
                 <span className="text-sm font-medium text-slate-400">km</span>
               </div>
             </div>
@@ -168,7 +249,9 @@ export default function Dashboard() {
               </div>
               <span className="text-sm font-medium text-slate-400">Compliance Rate</span>
               <div className="mt-2 flex items-baseline gap-2">
-                <span className="text-3xl font-bold text-white">87</span>
+                <span className="text-3xl font-bold text-white">
+                  {loading ? '...' : complianceRate}
+                </span>
                 <span className="text-sm font-medium text-slate-400">%</span>
               </div>
             </div>
@@ -182,7 +265,9 @@ export default function Dashboard() {
               </div>
               <span className="text-sm font-medium text-slate-400">Avg Pace</span>
               <div className="mt-2 flex items-baseline gap-2">
-                <span className="text-3xl font-bold text-white">5'42"</span>
+                <span className="text-3xl font-bold text-white">
+                  {loading ? '...' : avgPace}
+                </span>
                 <span className="text-sm font-medium text-slate-400">/km</span>
               </div>
             </div>
@@ -215,12 +300,15 @@ export default function Dashboard() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/50 text-sm">
-                  {[
-                    { id: 1, name: 'Alex Johnson', time: 'Today, 06:15 AM', distance: '5.2 km', pace: '5\'12"/km', duration: '27:02', avatar: 'AJ' },
-                    { id: 2, name: 'Sarah Miller', time: 'Today, 05:45 AM', distance: '8.4 km', pace: '4\'58"/km', duration: '41:43', avatar: 'SM' },
-                    { id: 3, name: 'Michael Chen', time: 'Yesterday, 18:30 PM', distance: '3.1 km', pace: '6\'05"/km', duration: '18:51', avatar: 'MC' },
-                    { id: 4, name: 'Emma Davis', time: 'Yesterday, 17:10 PM', distance: '10.0 km', pace: '5\'20"/km', duration: '53:20', avatar: 'ED' },
-                  ].map((row) => (
+                  {loading ? (
+                     <tr>
+                       <td colSpan={5} className="px-8 py-8 text-center text-slate-500">Loading recent runs...</td>
+                     </tr>
+                  ) : recentRuns.length === 0 ? (
+                     <tr>
+                       <td colSpan={5} className="px-8 py-8 text-center text-slate-500">No recent runs recorded by your personnel.</td>
+                     </tr>
+                  ) : recentRuns.map((row) => (
                     <tr key={row.id} className="hover:bg-slate-800/30 transition-colors group cursor-pointer">
                       <td className="px-8 py-5">
                         <div className="flex items-center gap-3">
