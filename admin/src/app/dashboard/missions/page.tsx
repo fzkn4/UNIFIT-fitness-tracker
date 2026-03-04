@@ -22,6 +22,7 @@ import {
 import { auth, realtimeDb } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { ref, push, onValue, remove, set } from 'firebase/database';
+import { useRouter } from 'next/navigation';
 
 interface Mission {
   id: string;
@@ -45,6 +46,7 @@ interface Personnel {
 }
 
 export default function MissionsAndRoutes() {
+  const router = useRouter();
   const [adminUid, setAdminUid] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'active' | 'library'>('active');
@@ -199,7 +201,8 @@ export default function MissionsAndRoutes() {
     }
   };
 
-  const openAssignModal = (mission: Mission) => {
+  const openAssignModal = (mission: Mission, e: React.MouseEvent) => {
+    e.stopPropagation();
     setAssignTargetMission(mission);
     setSelectedPersonnelIds(mission.assignedPersonnel || []);
     setIsAssignModalOpen(true);
@@ -393,7 +396,11 @@ export default function MissionsAndRoutes() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {displayMissions.map((mission) => (
-                <div key={mission.id} className={`bg-[#111827]/60 backdrop-blur-xl rounded-2xl border border-slate-800/80 hover:border-slate-700 hover:shadow-[0_8px_30px_rgba(0,0,0,0.5)] transition-all group overflow-hidden cursor-pointer flex flex-col ${mission.status === 'draft' ? 'opacity-80 hover:opacity-100 bg-[#111827]/40' : ''}`}>
+                <div 
+                  key={mission.id} 
+                  onClick={() => router.push(`/dashboard/missions/${mission.id}`)}
+                  className={`bg-[#111827]/60 backdrop-blur-xl rounded-2xl border border-slate-800/80 hover:border-slate-700 hover:shadow-[0_8px_30px_rgba(0,0,0,0.5)] transition-all group overflow-hidden cursor-pointer flex flex-col ${mission.status === 'draft' ? 'opacity-80 hover:opacity-100 bg-[#111827]/40' : ''}`}
+                >
                   {/* Map Thumbnail Placeholder */}
                   <div className={`h-40 relative overflow-hidden flex items-center justify-center ${mission.status === 'draft' ? 'bg-slate-900/50' : 'bg-slate-900'}`}>
                     <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
@@ -442,7 +449,7 @@ export default function MissionsAndRoutes() {
                       {mission.assignedPersonnel && mission.assignedPersonnel.length > 0 ? (
                         <>
                           <button 
-                            onClick={() => openAssignModal(mission)}
+                            onClick={(e) => openAssignModal(mission, e)}
                             className="flex -space-x-2 hover:opacity-80 transition-opacity"
                             title="Edit Assignments"
                           >
@@ -476,7 +483,7 @@ export default function MissionsAndRoutes() {
                           </div>
                           {mission.status === 'draft' ? (
                             <button 
-                              onClick={() => openAssignModal(mission)}
+                              onClick={(e) => openAssignModal(mission, e)}
                               className="text-primary text-xs font-bold uppercase tracking-wider hover:text-[#0284c7] transition-colors"
                             >
                               Assign Now
@@ -485,7 +492,7 @@ export default function MissionsAndRoutes() {
                             // Even active missions should be assignable
                             <div className="flex items-center space-x-3">
                               <button 
-                                onClick={() => openAssignModal(mission)}
+                                onClick={(e) => openAssignModal(mission, e)}
                                 className="text-primary text-xs font-bold uppercase tracking-wider hover:text-[#0284c7] transition-colors"
                               >
                                 Assign Now
