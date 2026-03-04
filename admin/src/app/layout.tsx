@@ -13,7 +13,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Unifit Administrator Portal",
+  title: {
+    template: '%s',
+    default: 'Login',
+  },
   description: "Monitor organizational running routines and performance.",
 };
 

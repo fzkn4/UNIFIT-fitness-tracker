@@ -3,31 +3,51 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingVi
 import { colors } from '../theme/colors';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { auth } from '../lib/firebase';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { auth, realtimeDb } from '../lib/firebase';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { ref, set } from 'firebase/database';
 
 const { width, height } = Dimensions.get('window');
 
-export default function LoginScreen({ navigation }: any) {
+export default function RegisterScreen({ navigation }: any) {
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleLogin = async () => {
-    if (!email || !password) {
-      setError('Please enter both email and password.');
+  const handleRegister = async () => {
+    setError('');
+    
+    if (!fullName || !email || !password || !confirmPassword) {
+      setError('Please fill in all fields.');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.');
       return;
     }
 
     setIsLoading(true);
-    setError('');
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      // Save user details to Realtime Database
+      await set(ref(realtimeDb, 'users/' + user.uid), {
+        fullName: fullName,
+        email: email,
+        lastLogin: Date.now(),
+        createdAt: Date.now(),
+        role: 'user' // Since this is the mobile client
+      });
+
       navigation.replace('Home');
     } catch (err: any) {
-      setError(err.message || 'Invalid credentials.');
+      setError(err.message || 'Failed to create account.');
       setIsLoading(false);
     }
   };
@@ -48,7 +68,7 @@ export default function LoginScreen({ navigation }: any) {
             style={styles.logoImage} 
             resizeMode="contain" 
           />
-          <Text style={styles.subtitle}>Sign in to track your runs</Text>
+          <Text style={styles.subtitle}>Create a new account</Text>
         </View>
 
         <View style={styles.formCard}>
@@ -57,6 +77,19 @@ export default function LoginScreen({ navigation }: any) {
               <Text style={styles.errorText}>{error}</Text>
             </View>
           ) : null}
+
+          <Text style={styles.label}>Full Name</Text>
+          <View style={styles.inputContainer}>
+            <Ionicons name="person-outline" size={20} color={colors.mutedForeground} style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="Juan Dela Cruz"
+              placeholderTextColor={colors.mutedForeground}
+              value={fullName}
+              onChangeText={setFullName}
+              autoCapitalize="words"
+            />
+          </View>
 
           <Text style={styles.label}>Email Address</Text>
           <View style={styles.inputContainer}>
@@ -72,12 +105,7 @@ export default function LoginScreen({ navigation }: any) {
             />
           </View>
 
-          <View style={styles.labelRow}>
-            <Text style={styles.label}>Password</Text>
-            <TouchableOpacity>
-              <Text style={styles.forgotPassword}>Forgot?</Text>
-            </TouchableOpacity>
-          </View>
+          <Text style={styles.label}>Password</Text>
           <View style={styles.inputContainer}>
             <Ionicons name="lock-closed-outline" size={20} color={colors.mutedForeground} style={styles.inputIcon} />
             <TextInput
@@ -90,7 +118,20 @@ export default function LoginScreen({ navigation }: any) {
             />
           </View>
 
-          <TouchableOpacity onPress={handleLogin} activeOpacity={0.8} style={{ marginTop: 20 }} disabled={isLoading}>
+          <Text style={styles.label}>Confirm Password</Text>
+          <View style={styles.inputContainer}>
+            <Ionicons name="lock-closed-outline" size={20} color={colors.mutedForeground} style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="••••••••"
+              placeholderTextColor={colors.mutedForeground}
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              secureTextEntry
+            />
+          </View>
+
+          <TouchableOpacity onPress={handleRegister} activeOpacity={0.8} style={{ marginTop: 20 }} disabled={isLoading}>
             <LinearGradient
               colors={['#38bdf8', '#0284c7']}
               start={{ x: 0, y: 0 }}
@@ -101,7 +142,7 @@ export default function LoginScreen({ navigation }: any) {
                 <ActivityIndicator color={colors.background} />
               ) : (
                 <>
-                  <Text style={styles.buttonText}>Sign In</Text>
+                  <Text style={styles.buttonText}>Sign Up</Text>
                   <Ionicons name="arrow-forward" size={20} color={colors.background} />
                 </>
               )}
@@ -109,9 +150,9 @@ export default function LoginScreen({ navigation }: any) {
           </TouchableOpacity>
 
           <View style={styles.footerRow}>
-            <Text style={styles.footerText}>Don't have an account? </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-              <Text style={styles.footerLink}>Sign Up</Text>
+            <Text style={styles.footerText}>Already have an account? </Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+              <Text style={styles.footerLink}>Sign In</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -169,11 +210,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(55,65,81,0.5)',
   },
-  labelRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
+  errorContainer: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+  },
+  errorText: {
+    color: '#f87171',
+    fontSize: 14,
   },
   label: {
     fontSize: 14,
@@ -182,11 +229,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     marginLeft: 4,
   },
-  forgotPassword: {
-    fontSize: 13,
-    color: colors.primary,
-    fontWeight: '500',
-  },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -194,7 +236,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(51,65,85,0.6)',
     borderRadius: 16,
-    marginBottom: 20,
+    marginBottom: 16,
     paddingHorizontal: 16,
     height: 56,
   },
@@ -219,18 +261,6 @@ const styles = StyleSheet.create({
     color: colors.background,
     fontSize: 16,
     fontWeight: 'bold',
-  },
-  errorContainer: {
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.3)',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 16,
-  },
-  errorText: {
-    color: '#f87171',
-    fontSize: 14,
   },
   footerRow: {
     flexDirection: 'row',
