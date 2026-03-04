@@ -196,11 +196,11 @@ export default function HomeScreen({ navigation }: any) {
 
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>Recent Activity</Text>
-          {runs.length > 5 && (
-            <TouchableOpacity>
+          {runs.length > 0 ? (
+            <TouchableOpacity onPress={() => navigation.navigate('RunHistory')}>
               <Text style={styles.seeAllText}>See All</Text>
             </TouchableOpacity>
-          )}
+          ) : null}
         </View>
         
         {loadingRuns ? (
@@ -218,15 +218,15 @@ export default function HomeScreen({ navigation }: any) {
               <View style={styles.activityIconContainer}>
                 <LinearGradient
                   colors={run.missionId ? ['rgba(139,92,246,0.2)', 'rgba(139,92,246,0.05)'] : ['rgba(56,189,248,0.2)', 'rgba(56,189,248,0.05)']}
-                  style={[styles.activityIconBg, run.missionId && { borderColor: 'rgba(139,92,246,0.3)' }]}
+                  style={[styles.activityIconBg, run.missionId ? { borderColor: 'rgba(139,92,246,0.3)' } : null]}
                 >
                   <Ionicons name={run.missionId ? "flag" : "walk"} size={22} color={run.missionId ? "#8b5cf6" : colors.primary} />
                 </LinearGradient>
               </View>
               <View style={styles.activityInfo}>
                 <Text style={styles.activityDate}>
-                  {run.missionTitle || formatActivityDate(run.timestamp)}
-                  {run.missionTitle && <Text style={{fontSize: 12, color: colors.mutedForeground, fontWeight: 'normal'}}> • {formatActivityDate(run.timestamp)}</Text>}
+                  {run.missionTitle ? run.missionTitle : formatActivityDate(run.timestamp)}
+                  {run.missionTitle ? <Text style={{fontSize: 12, color: colors.mutedForeground, fontWeight: 'normal'}}> • {formatActivityDate(run.timestamp)}</Text> : null}
                 </Text>
                 <View style={styles.activityStatsRow}>
                   <Text style={styles.activityStatPrime}>{(Math.round((run.distance / 1000) * 100) / 100).toFixed(2)} km</Text>
