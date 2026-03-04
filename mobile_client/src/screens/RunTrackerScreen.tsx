@@ -24,10 +24,14 @@ function getDistanceFromLatLonInMeters(lat1: number, lon1: number, lat2: number,
 
 const { width, height } = Dimensions.get('window');
 
-export default function RunTrackerScreen({ navigation }: any) {
+export default function RunTrackerScreen({ route, navigation }: any) {
+  // Extract routine info if navigated from RoutinesScreen
+  const missionId = route?.params?.missionId || null;
+  const missionTitle = route?.params?.missionTitle || null;
+
   const [isRunning, setIsRunning] = useState(false);
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
-  const [route, setRoute] = useState<any[]>([]);
+  const [routeCoordinates, setRouteCoordinates] = useState<any[]>([]);
   const [distance, setDistance] = useState(0); // in meters
   const [duration, setDuration] = useState(0); // in seconds
   const [timerInterval, setTimerInterval] = useState<any>(null);
@@ -52,7 +56,7 @@ export default function RunTrackerScreen({ navigation }: any) {
 
   const startRun = async () => {
     setIsRunning(true);
-    setRoute([]);
+    setRouteCoordinates([]);
     setDistance(0);
     setDuration(0);
 
@@ -70,7 +74,7 @@ export default function RunTrackerScreen({ navigation }: any) {
       },
       (newLocation) => {
         const { latitude, longitude } = newLocation.coords;
-        setRoute((prev) => [...prev, { latitude, longitude }]);
+        setRouteCoordinates((prev: any[]) => [...prev, { latitude, longitude }]);
         setLocation(newLocation);
         
         if (lastLoc) {
@@ -101,16 +105,30 @@ export default function RunTrackerScreen({ navigation }: any) {
     const finalDist = distance > 0 ? distance : Math.random() * 5000 + 1000; // Mock 1km to 6km if GPS didn't move
     const finalDuration = duration > 0 ? duration : Math.floor(Math.random() * 1800 + 600); // Mock 10m to 40m
 
+    const distanceKm = finalDist / 1000;
+    const averagePaceSecondsPerKm = distanceKm > 0 ? finalDuration / distanceKm : 0;
+    const paceMinutes = Math.floor(averagePaceSecondsPerKm / 60);
+    const paceSeconds = Math.floor(averagePaceSecondsPerKm % 60);
+    const finalPaceStr = paceMinutes > 0 ? `${paceMinutes}'${paceSeconds.toString().padStart(2, '0')}"` : '--';
+
+
     if (user) {
       try {
         const runsRef = ref(realtimeDb, 'runs');
         const newRunRef = push(runsRef);
-        await set(newRunRef, {
+        const payload = {
           userId: user.uid,
-          distance: finalDist, // in meters
-          duration: finalDuration, // in seconds
-          timestamp: Date.now()
-        });
+          userName: user.displayName || 'Anonymous personnel',
+          distance: finalDist, // meters
+          duration: finalDuration,  // seconds
+          averagePace: finalPaceStr, // mm'ss"
+          route: routeCoordinates,
+          timestamp: Date.now(),
+          // Link run to specific mission if applicable
+          missionId: missionId,
+          missionTitle: missionTitle
+        };
+        await set(newRunRef, payload);
       } catch (err) {
         console.error("Failed to save run to Firebase:", err);
       }
@@ -129,35 +147,53 @@ export default function RunTrackerScreen({ navigation }: any) {
 
   return (
     <View style={styles.container}>
-      {/* Map Section - Takes full background */}
       {location ? (
-        <MapView
-          style={styles.map}
-          initialRegion={{
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
-            latitudeDelta: 0.005,
-            longitudeDelta: 0.005,
-          }}
-          showsUserLocation
-          userInterfaceStyle="dark"
-          customMapStyle={mapStyle}
-        >
-          {route.length > 0 && (
-            <Polyline coordinates={route} strokeColor={colors.primary} strokeWidth={6} />
-          )}
-        </MapView>
+        <View style={styles.mapContainer}>
+          <MapView 
+            style={styles.map}
+            initialRegion={{
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude,
+              latitudeDelta: 0.005,
+              longitudeDelta: 0.005,
+            }}
+            showsUserLocation={true}
+            followsUserLocation={true}
+            showsMyLocationButton={false}
+            showsCompass={false}
+            customMapStyle={mapStyle}
+          >
+            <Polyline
+              coordinates={routeCoordinates}
+              strokeColor="#38bdf8"
+              strokeWidth={5}
+            />
+          </MapView>
+          
+          {/* Subtle gradient overlay to fade into the stats panel */}
+          <LinearGradient
+            colors={['transparent', '#0a0f1c']}
+            style={styles.mapOverlay}
+          />
+        </View>
       ) : (
-        <View style={styles.loadingMap}>
-          <Text style={{color: colors.primary, fontWeight: 'bold'}}>Locating GPS...</Text>
+        <View style={[styles.mapContainer, styles.loadingMap]}>
+          <Text style={styles.loadingText}>Acquiring GPS Signal...</Text>
         </View>
       )}
 
-      {/* Top Bar Overlay */}
-      <LinearGradient
-        colors={['rgba(10,15,28,0.9)', 'transparent']}
-        style={styles.topGradient}
-      >
+      {/* Routine Tracker Header */}
+      {missionTitle && (
+        <View style={styles.routineHeader}>
+          <View style={styles.routineHeaderInner}>
+            <Ionicons name="flag" size={16} color="#38bdf8" />
+            <Text style={styles.routineHeaderText} numberOfLines={1}>{missionTitle}</Text>
+          </View>
+        </View>
+      )}
+
+      {/* Top Bar with Back Button */}
+      <View style={styles.topBar}>
         <TouchableOpacity 
           style={styles.backBtn} 
           onPress={() => navigation.goBack()}
@@ -169,7 +205,7 @@ export default function RunTrackerScreen({ navigation }: any) {
           <View style={styles.gpsDot} />
           <Text style={styles.gpsText}>GPS</Text>
         </View>
-      </LinearGradient>
+      </View>
 
       {/* Bottom Stats Sheet Overlay */}
       <View style={styles.bottomSheet}>
@@ -243,25 +279,68 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0a0f1c',
   },
+  mapContainer: {
+    ...StyleSheet.absoluteFillObject,
+  },
   map: {
     ...StyleSheet.absoluteFillObject,
   },
+  mapOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: '50%', // Adjust as needed for the fade effect
+  },
   loadingMap: {
-    ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#0a0f1c',
   },
-  topGradient: {
+  loadingText: {
+    color: colors.primary, 
+    fontWeight: 'bold',
+    fontSize: 18,
+  },
+  topBar: {
     position: 'absolute',
-    top: 0,
-    width: '100%',
-    height: 120,
+    top: Platform.OS === 'ios' ? 60 : 40,
+    left: 20,
+    right: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  routineHeader: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 70 : 50,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 5,
+  },
+  routineHeaderInner: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 24,
-    paddingTop: Platform.OS === 'ios' ? 40 : 20,
+    backgroundColor: 'rgba(17,24,39,0.9)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(56,189,248,0.3)',
+    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+    maxWidth: '60%',
+  },
+  routineHeaderText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 14,
   },
   backBtn: {
     width: 44,

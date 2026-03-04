@@ -151,7 +151,10 @@ export default function RoutinesScreen({ navigation }: any) {
                   
                   <TouchableOpacity 
                     style={styles.startButton}
-                    onPress={() => navigation.navigate('RunTracker')}
+                    onPress={() => navigation.navigate('RunTracker', {
+                       missionId: mission.id,
+                       missionTitle: mission.title 
+                    })}
                   >
                     <Text style={styles.startButtonText}>Start Mission</Text>
                     <Ionicons name="arrow-forward" size={16} color="#fff" />

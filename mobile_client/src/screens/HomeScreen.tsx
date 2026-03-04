@@ -1,13 +1,100 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, Dimensions, Image } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, Dimensions, ActivityIndicator } from 'react-native';
 import { colors } from '../theme/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { auth, realtimeDb } from '../lib/firebase';
+import { ref, onValue } from 'firebase/database';
 
 const { width } = Dimensions.get('window');
 
 export default function HomeScreen({ navigation }: any) {
+  const [userName, setUserName] = useState('User');
+  const [initials, setInitials] = useState('U');
+  const [runs, setRuns] = useState<any[]>([]);
+  const [loadingRuns, setLoadingRuns] = useState(true);
+
   const currentDate = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (user) {
+      // Set User Info
+      const name = user.displayName || 'User';
+      setUserName(name);
+      setInitials(name.substring(0, 2).toUpperCase());
+
+      // Fetch user's runs
+      const runsRef = ref(realtimeDb, 'runs');
+      const unsubscribe = onValue(runsRef, (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.val();
+          const userRuns: any[] = Object.keys(data)
+            .map(key => ({
+              id: key,
+              ...data[key]
+            }))
+            .filter(run => run.userId === user.uid);
+          
+          userRuns.sort((a, b) => b.timestamp - a.timestamp);
+          setRuns(userRuns);
+        } else {
+          setRuns([]);
+        }
+        setLoadingRuns(false);
+      });
+
+      return () => unsubscribe();
+    } else {
+      setLoadingRuns(false);
+    }
+  }, []);
+
+  // Calculate Weekly Stats (last 7 days)
+
+  // Calculate Weekly Stats (last 7 days)
+  const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const weeklyRuns = runs.filter(r => r.timestamp > oneWeekAgo);
+  
+  const weekDistance = weeklyRuns.reduce((sum, r) => sum + r.distance, 0);
+  const weekRunCount = weeklyRuns.length;
+  
+  // Calculate Average Pace for the week (weighted by time/distance to be accurate, but simplified here)
+  let avgPaceStr = '--';
+  if (weeklyRuns.length > 0) {
+    const totalSeconds = weeklyRuns.reduce((sum, r) => sum + (r.duration || 0), 0);
+    if (weekDistance > 0 && totalSeconds > 0) {
+      const avgPaceSeconds = totalSeconds / (weekDistance / 1000); // distance is in meters
+      const paceMins = Math.floor(avgPaceSeconds / 60);
+      const paceSecs = Math.floor(avgPaceSeconds % 60);
+      avgPaceStr = `${paceMins}'${paceSecs.toString().padStart(2, '0')}"`;
+    }
+  }
+
+  const formatActivityDate = (timestamp: number) => {
+    const d = new Date(timestamp);
+    return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  };
+
+  const formatTime = (seconds: number) => {
+    if (!seconds) return '--:--';
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
+  const getRunPace = (run: any) => {
+    if (run.averagePace && run.averagePace !== '--') return run.averagePace;
+    const duration = run.duration || run.time || 0;
+    const distanceKm = run.distance / 1000;
+    
+    if (distanceKm <= 0 || duration <= 0) return '--';
+    
+    const avgPaceSeconds = duration / distanceKm;
+    const paceMins = Math.floor(avgPaceSeconds / 60);
+    const paceSecs = Math.floor(avgPaceSeconds % 60);
+    return `${paceMins}'${paceSecs.toString().padStart(2, '0')}"`;
+  };
 
   return (
     <View style={styles.container}>
@@ -23,7 +110,7 @@ export default function HomeScreen({ navigation }: any) {
           </View>
           <TouchableOpacity style={styles.profileBtn}>
             <View style={styles.profileAvatar}>
-              <Text style={styles.profileText}>JD</Text>
+              <Text style={styles.profileText}>{initials}</Text>
             </View>
           </TouchableOpacity>
         </View>
@@ -88,76 +175,71 @@ export default function HomeScreen({ navigation }: any) {
             <View style={styles.statIconBadge}>
               <Ionicons name="footsteps" size={20} color={colors.primary} />
             </View>
-            <Text style={styles.statValue}>12.5</Text>
+            <Text style={styles.statValue}>{(Math.round((weekDistance / 1000) * 100) / 100).toFixed(2)}</Text>
             <Text style={styles.statLabel}>Week km</Text>
           </View>
           <View style={styles.statBox}>
             <View style={[styles.statIconBadge, { backgroundColor: 'rgba(16,185,129,0.1)' }]}>
               <Ionicons name="flame" size={20} color="#10b981" />
             </View>
-            <Text style={styles.statValue}>3</Text>
+            <Text style={styles.statValue}>{weekRunCount}</Text>
             <Text style={styles.statLabel}>Runs</Text>
           </View>
           <View style={styles.statBox}>
             <View style={[styles.statIconBadge, { backgroundColor: 'rgba(139,92,246,0.1)' }]}>
               <Ionicons name="time" size={20} color="#8b5cf6" />
             </View>
-            <Text style={styles.statValue}>5'45"</Text>
+            <Text style={styles.statValue}>{avgPaceStr}</Text>
             <Text style={styles.statLabel}>Avg Pace</Text>
           </View>
         </View>
 
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>Recent Activity</Text>
-          <TouchableOpacity>
-            <Text style={styles.seeAllText}>See All</Text>
-          </TouchableOpacity>
+          {runs.length > 5 && (
+            <TouchableOpacity>
+              <Text style={styles.seeAllText}>See All</Text>
+            </TouchableOpacity>
+          )}
         </View>
         
-        {/* Mock recent runs */}
-        <TouchableOpacity style={styles.activityCard} activeOpacity={0.7}>
-          <View style={styles.activityIconContainer}>
-            <LinearGradient
-              colors={['rgba(56,189,248,0.2)', 'rgba(56,189,248,0.05)']}
-              style={styles.activityIconBg}
-            >
-              <Ionicons name="walk" size={22} color={colors.primary} />
-            </LinearGradient>
+        {loadingRuns ? (
+          <View style={{ padding: 20, alignItems: 'center' }}>
+            <ActivityIndicator color={colors.primary} />
           </View>
-          <View style={styles.activityInfo}>
-            <Text style={styles.activityDate}>Yesterday, 6:30 AM</Text>
-            <View style={styles.activityStatsRow}>
-              <Text style={styles.activityStatPrime}>5.02 km</Text>
-              <Text style={styles.activityStatDivider}>•</Text>
-              <Text style={styles.activityStatSecondary}>25:14</Text>
-              <Text style={styles.activityStatDivider}>•</Text>
-              <Text style={styles.activityStatSecondary}>5'01"/km</Text>
-            </View>
+        ) : runs.length === 0 ? (
+          <View style={{ padding: 20, alignItems: 'center', backgroundColor: 'rgba(17,24,39,0.5)', borderRadius: 20 }}>
+             <Ionicons name="footsteps-outline" size={32} color={colors.mutedForeground} style={{marginBottom: 8}} />
+             <Text style={{color: colors.mutedForeground, fontSize: 14}}>No running activity found yet.</Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color={colors.mutedForeground} />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.activityCard} activeOpacity={0.7}>
-          <View style={styles.activityIconContainer}>
-            <LinearGradient
-              colors={['rgba(56,189,248,0.2)', 'rgba(56,189,248,0.05)']}
-              style={styles.activityIconBg}
-            >
-              <Ionicons name="walk" size={22} color={colors.primary} />
-            </LinearGradient>
-          </View>
-          <View style={styles.activityInfo}>
-            <Text style={styles.activityDate}>Mon, 10 Feb, 7:00 AM</Text>
-            <View style={styles.activityStatsRow}>
-              <Text style={styles.activityStatPrime}>3.15 km</Text>
-              <Text style={styles.activityStatDivider}>•</Text>
-              <Text style={styles.activityStatSecondary}>18:20</Text>
-              <Text style={styles.activityStatDivider}>•</Text>
-              <Text style={styles.activityStatSecondary}>5'49"/km</Text>
-            </View>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={colors.mutedForeground} />
-        </TouchableOpacity>
+        ) : (
+          runs.slice(0, 5).map(run => (
+            <TouchableOpacity key={run.id} style={styles.activityCard} activeOpacity={0.7}>
+              <View style={styles.activityIconContainer}>
+                <LinearGradient
+                  colors={run.missionId ? ['rgba(139,92,246,0.2)', 'rgba(139,92,246,0.05)'] : ['rgba(56,189,248,0.2)', 'rgba(56,189,248,0.05)']}
+                  style={[styles.activityIconBg, run.missionId && { borderColor: 'rgba(139,92,246,0.3)' }]}
+                >
+                  <Ionicons name={run.missionId ? "flag" : "walk"} size={22} color={run.missionId ? "#8b5cf6" : colors.primary} />
+                </LinearGradient>
+              </View>
+              <View style={styles.activityInfo}>
+                <Text style={styles.activityDate}>
+                  {run.missionTitle || formatActivityDate(run.timestamp)}
+                  {run.missionTitle && <Text style={{fontSize: 12, color: colors.mutedForeground, fontWeight: 'normal'}}> • {formatActivityDate(run.timestamp)}</Text>}
+                </Text>
+                <View style={styles.activityStatsRow}>
+                  <Text style={styles.activityStatPrime}>{(Math.round((run.distance / 1000) * 100) / 100).toFixed(2)} km</Text>
+                  <Text style={styles.activityStatDivider}>•</Text>
+                  <Text style={styles.activityStatSecondary}>{formatTime(run.duration || run.time)}</Text>
+                  <Text style={styles.activityStatDivider}>•</Text>
+                  <Text style={styles.activityStatSecondary}>{getRunPace(run)}/km</Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.mutedForeground} />
+            </TouchableOpacity>
+          ))
+        )}
         
         {/* Bottom padding spacing */}
         <View style={{ height: 40 }} />
