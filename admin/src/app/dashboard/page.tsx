@@ -1,4 +1,6 @@
-import React from 'react';
+"use client";
+
+import React, { useEffect, useState } from 'react';
 import { 
   Activity, 
   Users, 
@@ -11,13 +13,40 @@ import {
   Bell,
   ChevronRight
 } from 'lucide-react';
-import type { Metadata } from 'next';
+// Metadata cannot be exported from a Client Component
+// export const metadata: Metadata = {
+//   title: 'Dashboard',
+// };
 
-export const metadata: Metadata = {
-  title: 'Dashboard',
-};
+import { auth, realtimeDb } from '@/lib/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import { ref, onValue } from 'firebase/database';
 
 export default function Dashboard() {
+  const [personnelCount, setPersonnelCount] = useState(0);
+
+  useEffect(() => {
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        // Fetch personnel linked to this admin
+        const usersRef = ref(realtimeDb, 'users');
+        onValue(usersRef, (snapshot) => {
+          if (snapshot.exists()) {
+            const usersData = snapshot.val();
+            const count = Object.values(usersData).filter(
+              (u: any) => u.role === 'user' && u.adminId === user.uid
+            ).length;
+            setPersonnelCount(count);
+          }
+        });
+      } else {
+        window.location.href = '/';
+      }
+    });
+
+    return () => unsubscribeAuth();
+  }, []);
+
   return (
     <div className="flex h-screen bg-[#0a0f1c] text-slate-200 overflow-hidden font-sans">
       {/* Sidebar */}
@@ -34,7 +63,7 @@ export default function Dashboard() {
               <Activity className="w-5 h-5" />
               Overview
             </a>
-            <a href="#" className="flex items-center gap-3 px-4 py-3.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 rounded-xl font-medium transition-all group">
+            <a href="/dashboard/personnel" className="flex items-center gap-3 px-4 py-3.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 rounded-xl font-medium transition-all group">
               <Users className="w-5 h-5 group-hover:text-primary transition-colors" />
               Personnel List
             </a>
@@ -54,10 +83,10 @@ export default function Dashboard() {
         </div>
 
         <div className="p-6 border-t border-slate-800/60 mt-auto">
-          <a href="/" className="flex items-center gap-3 px-4 py-3 hover:bg-red-500/10 text-slate-400 hover:text-red-400 rounded-xl font-medium transition-colors group">
+          <button onClick={() => auth.signOut()} className="flex items-center gap-3 px-4 py-3 hover:bg-red-500/10 text-slate-400 hover:text-red-400 rounded-xl font-medium transition-colors w-full group">
             <LogOut className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
             Sign Out
-          </a>
+          </button>
         </div>
       </aside>
 
@@ -112,7 +141,7 @@ export default function Dashboard() {
               </div>
               <span className="text-sm font-medium text-slate-400">Total Personnel</span>
               <div className="mt-2 flex items-baseline gap-2">
-                <span className="text-3xl font-bold text-white">124</span>
+                <span className="text-3xl font-bold text-white">{personnelCount}</span>
               </div>
             </div>
 
