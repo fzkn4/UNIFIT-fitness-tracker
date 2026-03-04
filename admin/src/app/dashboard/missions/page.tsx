@@ -13,15 +13,15 @@ import {
   Compass,
   MapPin,
   Clock,
-  MoreVertical,
   Target,
   Trash2,
   X,
   Calendar,
   Repeat
 } from 'lucide-react';
-import { auth } from '@/lib/firebase';
+import { auth, realtimeDb } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
+import { ref, push, onValue, remove, set } from 'firebase/database';
 
 interface Mission {
   id: string;
@@ -34,49 +34,24 @@ interface Mission {
   assignedPersonnel: string[]; // Mock initials for now
   routineType: 'once' | 'daily' | 'weekly' | 'monthly';
   deadline?: string; // e.g YYYY-MM-DD
+  adminId: string;
+  createdAt: number;
 }
 
-const initialMissions: Mission[] = [
-  {
-    id: '1',
-    title: 'Coastal Run Alpha',
-    description: 'Standard endurance conditioning route along the bay. Moderate elevation changes.',
-    location: 'Central Bay Park',
-    targetDistance: 5.0,
-    targetPace: "5'30\"",
-    status: 'active',
-    assignedPersonnel: ['JD', 'AS', '+6'],
-    routineType: 'once',
-    deadline: '2026-03-08'
-  },
-  {
-    id: '2',
-    title: 'City Sprints',
-    description: 'High-intensity interval training route through the downtown blocks.',
-    targetDistance: 3.2,
-    targetPace: "4'45\"",
-    status: 'active',
-    assignedPersonnel: ['MR', '+12'],
-    routineType: 'daily'
-  },
-  {
-    id: '3',
-    title: 'Mountain Trail Bravo',
-    description: 'Grueling uphill run designed for advanced personnel only.',
-    location: 'Mt. Apo Trail',
-    targetDistance: 8.0,
-    targetPace: "6'15\"",
-    status: 'draft',
-    assignedPersonnel: [],
-    routineType: 'weekly'
-  }
-];
+interface Personnel {
+  id: string;
+  name: string;
+  email: string;
+}
 
 export default function MissionsAndRoutes() {
+  const [adminUid, setAdminUid] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'active' | 'library'>('active');
-  const [missions, setMissions] = useState<Mission[]>(initialMissions);
+  const [missions, setMissions] = useState<Mission[]>([]);
+  const [personnelList, setPersonnelList] = useState<Personnel[]>([]);
   
-  // Modal State
+  // Create Mission Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newDesc, setNewDesc] = useState('');
@@ -88,14 +63,65 @@ export default function MissionsAndRoutes() {
   const [newRoutine, setNewRoutine] = useState<'once'|'daily'|'weekly'|'monthly'>('once');
   const [newDeadline, setNewDeadline] = useState('');
 
+  // Assign Personnel Modal State
+  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [assignTargetMission, setAssignTargetMission] = useState<Mission | null>(null);
+  const [selectedPersonnelIds, setSelectedPersonnelIds] = useState<string[]>([]);
+
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
-       if (!user) {
+       if (user) {
+         setAdminUid(user.uid);
+         fetchMissions(user.uid);
+         fetchPersonnel(user.uid);
+       } else {
          window.location.href = '/';
        }
     });
     return () => unsubscribeAuth();
   }, []);
+
+  const fetchMissions = (uid: string) => {
+    const missionsRef = ref(realtimeDb, 'missions');
+    onValue(missionsRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const missionsData = snapshot.val();
+        const adminMissions: Mission[] = Object.keys(missionsData)
+          .map((key) => ({
+            id: key,
+            ...missionsData[key],
+          }))
+          .filter(
+            (mission: any) => mission.adminId === uid
+          );
+        
+        // Sort by created date descending
+        adminMissions.sort((a, b) => b.createdAt - a.createdAt);
+        setMissions(adminMissions);
+      } else {
+        setMissions([]);
+      }
+      setLoading(false);
+    });
+  };
+
+  const fetchPersonnel = (uid: string) => {
+    const personnelRef = ref(realtimeDb, 'users');
+    onValue(personnelRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.val();
+        const adminPersonnel: Personnel[] = Object.keys(data)
+          .map((key) => ({
+            id: key,
+            ...data[key],
+          }))
+          .filter((user: any) => user.adminId === uid);
+        setPersonnelList(adminPersonnel);
+      } else {
+        setPersonnelList([]);
+      }
+    });
+  };
 
   // Derived Stats
   const activeMissionsCount = missions.filter(m => m.status === 'active').length;
@@ -115,46 +141,93 @@ export default function MissionsAndRoutes() {
     activeTab === 'active' ? m.status === 'active' : m.status === 'draft'
   );
 
-  const handleDelete = (id: string, e: React.MouseEvent) => {
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (window.confirm("Are you sure you want to delete this route?")) {
-      setMissions(prev => prev.filter(m => m.id !== id));
+      try {
+        const missionRef = ref(realtimeDb, `missions/${id}`);
+        await remove(missionRef);
+      } catch (error) {
+        console.error("Error deleting mission:", error);
+        alert("Failed to delete mission.");
+      }
     }
   };
 
-  const handleCreateMission = (e: React.FormEvent) => {
+  const handleCreateMission = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTitle || !newDistance || !newPace) return;
+    if (!newTitle || !newDistance || !newPace || !adminUid) return;
 
-    const newMission: Mission = {
-      id: Date.now().toString(),
-      title: newTitle,
-      description: newDesc,
-      location: newLocation ? newLocation.trim() : undefined,
-      targetDistance: parseFloat(newDistance),
-      targetPace: newPace,
-      status: newStatus,
-      assignedPersonnel: newStatus === 'active' ? ['AD', '+3'] : [],
-      routineType: newRoutine,
-      deadline: newRoutine === 'once' ? newDeadline : undefined
-    };
+    try {
+      const missionsRef = ref(realtimeDb, 'missions');
+      const newMissionRef = push(missionsRef);
+      
+      const newMissionData = {
+        title: newTitle,
+        description: newDesc,
+        location: newLocation ? newLocation.trim() : null,
+        targetDistance: parseFloat(newDistance),
+        targetPace: newPace,
+        status: newStatus,
+        assignedPersonnel: [], // Starts with nobody assigned
+        routineType: newRoutine,
+        deadline: newRoutine === 'once' ? newDeadline : null,
+        adminId: adminUid,
+        createdAt: Date.now()
+      };
 
-    setMissions(prev => [newMission, ...prev]);
-    setIsModalOpen(false);
-    
-    // Reset form
-    setNewTitle('');
-    setNewDesc('');
-    setNewLocation('');
-    setNewDistance('');
-    setNewPace('');
-    setNewStatus('active');
-    setIsRecurring(false);
-    setNewRoutine('once');
-    setNewDeadline('');
-    
-    // Switch to appropriate tab
-    setActiveTab(newStatus === 'active' ? 'active' : 'library');
+      await set(newMissionRef, newMissionData);
+      
+      setIsModalOpen(false);
+      
+      // Reset form
+      setNewTitle('');
+      setNewDesc('');
+      setNewLocation('');
+      setNewDistance('');
+      setNewPace('');
+      setNewStatus('active');
+      setIsRecurring(false);
+      setNewRoutine('once');
+      setNewDeadline('');
+      
+      // Switch to appropriate tab
+      setActiveTab(newStatus === 'active' ? 'active' : 'library');
+    } catch (error) {
+       console.error("Error adding mission:", error);
+       alert("Failed to create mission.");
+    }
+  };
+
+  const openAssignModal = (mission: Mission) => {
+    setAssignTargetMission(mission);
+    setSelectedPersonnelIds(mission.assignedPersonnel || []);
+    setIsAssignModalOpen(true);
+  };
+
+  const handleSaveAssignments = async () => {
+    if (!assignTargetMission) return;
+    try {
+      const missionRef = ref(realtimeDb, `missions/${assignTargetMission.id}/assignedPersonnel`);
+      await set(missionRef, selectedPersonnelIds);
+      setIsAssignModalOpen(false);
+      setAssignTargetMission(null);
+    } catch (error) {
+      console.error("Error saving assignments:", error);
+      alert("Failed to save assignments.");
+    }
+  };
+
+  const getPersonnelInitials = (ids: string[]) => {
+    if (!ids) return [];
+    return ids.map(id => {
+      const person = personnelList.find(p => p.id === id);
+      if (person && person.name) {
+        // Extract initials (e.g., "Juan Dela Cruz" -> "JD")
+        return person.name.split(' ').map(n => n.charAt(0)).join('').substring(0, 2).toUpperCase();
+      }
+      return '??';
+    });
   };
 
   return (
@@ -305,7 +378,11 @@ export default function MissionsAndRoutes() {
           </div>
 
           {/* Grid Layout for Missions/Routes */}
-          {displayMissions.length === 0 ? (
+          {loading ? (
+             <div className="p-16 flex justify-center items-center">
+                <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+             </div>
+          ) : displayMissions.length === 0 ? (
             <div className="p-16 flex flex-col items-center justify-center text-center bg-[#111827]/40 rounded-2xl border border-slate-800/60 mt-8">
               <div className="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center mb-4 border border-slate-700">
                 <Map className="w-8 h-8 text-slate-500" />
@@ -364,13 +441,22 @@ export default function MissionsAndRoutes() {
                     <div className="pt-4 flex items-center justify-between">
                       {mission.assignedPersonnel && mission.assignedPersonnel.length > 0 ? (
                         <>
-                          <div className="flex -space-x-2">
-                            {mission.assignedPersonnel.map((p, idx) => (
-                              <div key={idx} className={`w-8 h-8 rounded-full border-2 border-[#111827] flex items-center justify-center text-[10px] font-bold ${p.startsWith('+') ? 'bg-slate-800 text-slate-400' : 'bg-slate-700 text-slate-300'}`}>
-                                {p}
+                          <button 
+                            onClick={() => openAssignModal(mission)}
+                            className="flex -space-x-2 hover:opacity-80 transition-opacity"
+                            title="Edit Assignments"
+                          >
+                            {getPersonnelInitials(mission.assignedPersonnel).slice(0, 3).map((initials, idx) => (
+                              <div key={idx} className={`w-8 h-8 rounded-full border-2 border-[#111827] flex items-center justify-center text-[10px] font-bold bg-slate-700 text-slate-300`}>
+                                {initials}
                               </div>
                             ))}
-                          </div>
+                            {mission.assignedPersonnel.length > 3 && (
+                              <div className="w-8 h-8 rounded-full border-2 border-[#111827] flex items-center justify-center text-[10px] font-bold bg-slate-800 text-slate-400">
+                                +{mission.assignedPersonnel.length - 3}
+                              </div>
+                            )}
+                          </button>
                           {mission.routineType === 'once' ? (
                             <div className="flex items-center gap-1.5 text-xs font-medium text-slate-400">
                               <Calendar className="w-3.5 h-3.5" />
@@ -389,21 +475,33 @@ export default function MissionsAndRoutes() {
                             Not assigned
                           </div>
                           {mission.status === 'draft' ? (
-                            <button className="text-primary text-xs font-bold uppercase tracking-wider hover:text-[#0284c7] transition-colors">
+                            <button 
+                              onClick={() => openAssignModal(mission)}
+                              className="text-primary text-xs font-bold uppercase tracking-wider hover:text-[#0284c7] transition-colors"
+                            >
                               Assign Now
                             </button>
                           ) : (
-                            mission.routineType === 'once' ? (
-                              <div className="flex items-center gap-1.5 text-xs font-medium text-slate-400">
-                                <Calendar className="w-3.5 h-3.5" />
-                                Due: {mission.deadline || 'No date'}
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-1.5 text-xs font-bold text-blue-400 bg-blue-500/10 px-2 py-1 rounded-md border border-blue-500/20">
-                                <Repeat className="w-3.5 h-3.5" />
-                                {mission.routineType.charAt(0).toUpperCase() + mission.routineType.slice(1)} Routine
-                              </div>
-                            )
+                            // Even active missions should be assignable
+                            <div className="flex items-center space-x-3">
+                              <button 
+                                onClick={() => openAssignModal(mission)}
+                                className="text-primary text-xs font-bold uppercase tracking-wider hover:text-[#0284c7] transition-colors"
+                              >
+                                Assign Now
+                              </button>
+                              {mission.routineType === 'once' ? (
+                                <div className="flex items-center gap-1.5 text-xs font-medium text-slate-400">
+                                  <Calendar className="w-3.5 h-3.5" />
+                                  Due: {mission.deadline || 'No date'}
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1.5 text-xs font-bold text-blue-400 bg-blue-500/10 px-2 py-1 rounded-md border border-blue-500/20">
+                                  <Repeat className="w-3.5 h-3.5" />
+                                  {mission.routineType.charAt(0).toUpperCase() + mission.routineType.slice(1)} Routine
+                                </div>
+                              )}
+                            </div>
                           )}
                         </>
                       )}
@@ -589,6 +687,87 @@ export default function MissionsAndRoutes() {
           </div>
         </div>
       )}
+
+      {/* Assign Personnel Modal */}
+      {isAssignModalOpen && assignTargetMission && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#111827] w-full max-w-md rounded-2xl border border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="flex justify-between items-center p-6 border-b border-slate-800">
+              <div>
+                <h3 className="text-xl font-bold text-white">Assign Personnel</h3>
+                <p className="text-sm text-slate-400">Select personnel for {assignTargetMission.title}</p>
+              </div>
+              <button 
+                onClick={() => {
+                  setIsAssignModalOpen(false);
+                  setAssignTargetMission(null);
+                }}
+                className="text-slate-400 hover:text-white p-2 hover:bg-slate-800 rounded-xl transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto flex-1">
+              {personnelList.length === 0 ? (
+                <div className="text-center py-8 text-slate-400">
+                  <p>You don't have any registered personnel yet.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {personnelList.map(person => (
+                    <label 
+                      key={person.id} 
+                      className={`flex items-center p-3 rounded-xl cursor-pointer border transition-all ${
+                        selectedPersonnelIds.includes(person.id)
+                          ? 'border-primary bg-primary/10'
+                          : 'border-slate-800 bg-slate-900 hover:border-slate-700'
+                      }`}
+                    >
+                      <input 
+                        type="checkbox"
+                        checked={selectedPersonnelIds.includes(person.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedPersonnelIds(prev => [...prev, person.id]);
+                          } else {
+                            setSelectedPersonnelIds(prev => prev.filter(id => id !== person.id));
+                          }
+                        }}
+                        className="w-5 h-5 rounded border-slate-700 text-primary focus:ring-primary focus:ring-offset-slate-900 bg-slate-800"
+                      />
+                      <div className="ml-3">
+                        <p className="text-sm font-medium text-white">{person.name}</p>
+                        <p className="text-xs text-slate-400">{person.email}</p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3 p-6 border-t border-slate-800 bg-slate-900">
+              <button 
+                onClick={() => {
+                  setIsAssignModalOpen(false);
+                  setAssignTargetMission(null);
+                }}
+                className="flex-1 px-4 py-2.5 rounded-xl font-semibold text-white bg-slate-800 hover:bg-slate-700 transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleSaveAssignments}
+                disabled={personnelList.length === 0}
+                className="flex-1 px-4 py-2.5 rounded-xl font-semibold text-white bg-gradient-to-r from-primary to-[#0284c7] hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Save Assignments
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
