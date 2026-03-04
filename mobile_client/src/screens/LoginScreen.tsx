@@ -4,7 +4,7 @@ import { colors } from '../theme/colors';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../lib/firebase';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
 
 const { width, height } = Dimensions.get('window');
 
@@ -13,6 +13,19 @@ export default function LoginScreen({ navigation }: any) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
+
+  React.useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        navigation.replace('Home');
+      } else {
+        setIsInitializing(false);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -31,6 +44,14 @@ export default function LoginScreen({ navigation }: any) {
       setIsLoading(false);
     }
   };
+
+  if (isInitializing) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView 
