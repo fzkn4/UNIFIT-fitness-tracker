@@ -1,6 +1,6 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getAuth, initializeAuth, getReactNativePersistence, Auth } from "firebase/auth";
+import { getAuth, initializeAuth, Auth, getReactNativePersistence } from "firebase/auth";
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 import { getFirestore } from "firebase/firestore";
 import { getDatabase } from "firebase/database";
@@ -26,6 +26,7 @@ if (getApps().length > 0) {
 } else {
   app = initializeApp(firebaseConfig);
   auth = initializeAuth(app, {
+    // @ts-ignore - The type definitions for getReactNativePersistence might be missing in some typescript setups for firebase v10+, but the export exists.
     persistence: getReactNativePersistence(ReactNativeAsyncStorage)
   });
 }

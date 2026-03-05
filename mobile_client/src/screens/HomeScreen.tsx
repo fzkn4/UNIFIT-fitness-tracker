@@ -8,6 +8,7 @@ import { ref, onValue, get } from 'firebase/database';
 import { signOut } from 'firebase/auth';
 import { useNetInfo } from '@react-native-community/netinfo';
 import { syncOfflineRuns } from '../lib/OfflineSyncManager';
+import RunDetailsModal from '../components/RunDetailsModal';
 
 const { width } = Dimensions.get('window');
 
@@ -19,6 +20,8 @@ export default function HomeScreen({ navigation }: any) {
   const [runs, setRuns] = useState<any[]>([]);
   const [loadingRuns, setLoadingRuns] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedRun, setSelectedRun] = useState<any>(null);
+  const [modalVisible, setModalVisible] = useState(false);
 
   const currentDate = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
 
@@ -311,7 +314,15 @@ export default function HomeScreen({ navigation }: any) {
           </View>
         ) : (
           runs.slice(0, 5).map(run => (
-            <TouchableOpacity key={run.id} style={styles.activityCard} activeOpacity={0.7}>
+            <TouchableOpacity 
+              key={run.id} 
+              style={styles.activityCard} 
+              activeOpacity={0.7}
+              onPress={() => {
+                setSelectedRun(run);
+                setModalVisible(true);
+              }}
+            >
               <View style={styles.activityIconContainer}>
                 <LinearGradient
                   colors={run.missionId ? ['rgba(139,92,246,0.2)', 'rgba(139,92,246,0.05)'] : ['rgba(56,189,248,0.2)', 'rgba(56,189,248,0.05)']}
@@ -341,6 +352,12 @@ export default function HomeScreen({ navigation }: any) {
         {/* Bottom padding spacing */}
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      <RunDetailsModal 
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
+        run={selectedRun}
+      />
     </View>
   );
 }

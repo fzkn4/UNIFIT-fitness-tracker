@@ -5,10 +5,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { auth, realtimeDb } from '../lib/firebase';
 import { ref, onValue } from 'firebase/database';
+import RunDetailsModal from '../components/RunDetailsModal';
 
 export default function RunHistoryScreen({ navigation }: any) {
   const [runs, setRuns] = useState<any[]>([]);
   const [loadingRuns, setLoadingRuns] = useState(true);
+  const [selectedRun, setSelectedRun] = useState<any>(null);
+  const [modalVisible, setModalVisible] = useState(false);
 
   useEffect(() => {
     const user = auth.currentUser;
@@ -92,7 +95,15 @@ export default function RunHistoryScreen({ navigation }: any) {
           </View>
         ) : (
           runs.map(run => (
-            <TouchableOpacity key={run.id} style={styles.activityCard} activeOpacity={0.7} onPress={() => {}}>
+            <TouchableOpacity 
+              key={run.id} 
+              style={styles.activityCard} 
+              activeOpacity={0.7} 
+              onPress={() => {
+                setSelectedRun(run);
+                setModalVisible(true);
+              }}
+            >
               <View style={styles.activityIconContainer}>
                 <LinearGradient
                   colors={run.missionId ? ['rgba(139,92,246,0.2)', 'rgba(139,92,246,0.05)'] : ['rgba(56,189,248,0.2)', 'rgba(56,189,248,0.05)']}
@@ -120,6 +131,12 @@ export default function RunHistoryScreen({ navigation }: any) {
         )}
 
       </ScrollView>
+
+      <RunDetailsModal 
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
+        run={selectedRun}
+      />
     </View>
   );
 }
