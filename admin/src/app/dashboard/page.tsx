@@ -21,6 +21,7 @@ import {
 import { auth, realtimeDb } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { ref, onValue } from 'firebase/database';
+import RunDetailModal from '@/components/RunDetailModal';
 
 export default function Dashboard() {
   const [personnelCount, setPersonnelCount] = useState(0);
@@ -28,7 +29,10 @@ export default function Dashboard() {
   const [avgPace, setAvgPace] = useState('--');
   const [complianceRate, setComplianceRate] = useState(0);
   const [recentRuns, setRecentRuns] = useState<any[]>([]);
+  const [rawRuns, setRawRuns] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedRun, setSelectedRun] = useState<any>(null);
+  const [modalVisible, setModalVisible] = useState(false);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
@@ -85,6 +89,11 @@ export default function Dashboard() {
 
                 // 4. Transform Recent Runs for Table
                 const sortedRuns = filteredRuns.sort((a: any, b: any) => b.timestamp - a.timestamp).slice(0, 10);
+                // Keep full run objects for modal access
+                setRawRuns(sortedRuns.map(run => {
+                  const u = adminPersonnel.find(p => p.id === run.userId);
+                  return { ...run, userName: u?.fullName || 'Unknown User' };
+                }));
                 const tableData = sortedRuns.map(run => {
                   const u = adminPersonnel.find(p => p.id === run.userId);
                   const distKm = (run.distance / 1000);
@@ -308,8 +317,18 @@ export default function Dashboard() {
                      <tr>
                        <td colSpan={5} className="px-8 py-8 text-center text-slate-500">No recent runs recorded by your personnel.</td>
                      </tr>
-                  ) : recentRuns.map((row) => (
-                    <tr key={row.id} className="hover:bg-slate-800/30 transition-colors group cursor-pointer">
+                  ) : recentRuns.map((row, idx) => (
+                    <tr 
+                      key={row.id} 
+                      className="hover:bg-slate-800/30 transition-colors group cursor-pointer"
+                      onClick={() => {
+                        const fullRun = rawRuns.find((r: any) => r.id === row.id);
+                        if (fullRun) {
+                          setSelectedRun(fullRun);
+                          setModalVisible(true);
+                        }
+                      }}
+                    >
                       <td className="px-8 py-5">
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-300 border border-slate-700">
@@ -330,6 +349,12 @@ export default function Dashboard() {
           </section>
         </div>
       </main>
+
+      <RunDetailModal
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
+        run={selectedRun}
+      />
     </div>
   );
 }

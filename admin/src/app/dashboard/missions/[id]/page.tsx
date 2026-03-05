@@ -17,6 +17,7 @@ import {
 import { auth, realtimeDb } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { ref, onValue, get } from 'firebase/database';
+import RunDetailModal from '@/components/RunDetailModal';
 
 interface Mission {
   id: string;
@@ -47,6 +48,9 @@ interface Run {
   duration: number; // in seconds
   averagePace: string;
   timestamp: number;
+  route?: { latitude: number; longitude: number }[];
+  userName?: string;
+  missionTitle?: string;
 }
 
 export default function MissionProgress() {
@@ -59,6 +63,8 @@ export default function MissionProgress() {
   const [assignedUsers, setAssignedUsers] = useState<Personnel[]>([]);
   const [missionRuns, setMissionRuns] = useState<Run[]>([]);
   const [expandedUsers, setExpandedUsers] = useState<string[]>([]);
+  const [selectedRun, setSelectedRun] = useState<any>(null);
+  const [modalVisible, setModalVisible] = useState(false);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
@@ -340,7 +346,15 @@ export default function MissionProgress() {
                         ) : (
                           <div className="space-y-3">
                             {userRuns.map((run, idx) => (
-                              <div key={run.id} className="flex items-center justify-between p-3.5 bg-[#111827] rounded-xl border border-slate-800/80">
+                              <div 
+                                key={run.id} 
+                                className="flex items-center justify-between p-3.5 bg-[#111827] rounded-xl border border-slate-800/80 cursor-pointer hover:border-slate-700 hover:bg-slate-800/40 transition-all"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedRun({ ...run, userName: user.name, missionTitle: mission.title });
+                                  setModalVisible(true);
+                                }}
+                              >
                                 <div className="flex items-center gap-4">
                                   <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">
                                     #{userRuns.length - idx}
@@ -377,6 +391,12 @@ export default function MissionProgress() {
           )}
         </div>
       </main>
+
+      <RunDetailModal
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
+        run={selectedRun}
+      />
     </div>
   );
 }
