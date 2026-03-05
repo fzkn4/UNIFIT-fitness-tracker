@@ -58,7 +58,7 @@ export default function HomeScreen({ navigation }: any) {
   }, [netInfo.isConnected, netInfo.isInternetReachable]);
 
   const onRefresh = useCallback(async () => {
-    if (!netInfo.isConnected) {
+    if (netInfo.isConnected === false) {
       Alert.alert("Offline", "You cannot manually refresh while offline. Your new runs are safely saved locally.");
       return;
     }
