@@ -130,9 +130,10 @@ export default function MissionsAndRoutes() {
   const draftMissionsCount = missions.filter(m => m.status === 'draft').length;
   // Mock sum of personnel
   const totalPersonnelAssigned = missions.reduce((acc, curr) => {
-    if (curr.status === 'active' && curr.assignedPersonnel.length > 0) {
+    const assigned = curr.assignedPersonnel || [];
+    if (curr.status === 'active' && assigned.length > 0) {
       // Very loose mock math based on initial data strings like "+6"
-      const extra = curr.assignedPersonnel.find(p => p.startsWith('+')) || '+0';
+      const extra = assigned.find((p: string) => p.startsWith('+')) || '+0';
       return acc + 2 + parseInt(extra.replace('+', '')); 
     }
     return acc;
