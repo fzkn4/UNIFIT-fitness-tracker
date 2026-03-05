@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Dimensions, Platform } from 'react-native';
-import MapView, { Polyline } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
@@ -9,6 +8,7 @@ import { auth, realtimeDb } from '../lib/firebase';
 import { ref, push, set } from 'firebase/database';
 import { useNetInfo } from '@react-native-community/netinfo';
 import { saveRunOffline } from '../lib/OfflineSyncManager';
+import OSMMapView from '../components/OSMMapView';
 
 // Haversine formula to calculate distance between two lat/lon points in meters
 function getDistanceFromLatLonInMeters(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -59,39 +59,52 @@ export default function RunTrackerScreen({ route, navigation }: any) {
   }, []);
 
   const startRun = async () => {
-    setIsRunning(true);
-    setRouteCoordinates([]);
-    setDistance(0);
-    setDuration(0);
-
-    const interval = setInterval(() => {
-      setDuration((prev) => prev + 1);
-    }, 1000);
-    setTimerInterval(interval);
-
-    let lastLoc: any = null;
-    const sub = await Location.watchPositionAsync(
-      {
-        accuracy: Location.Accuracy.High,
-        timeInterval: 2000,
-        distanceInterval: 1,
-      },
-      (newLocation) => {
-        const { latitude, longitude } = newLocation.coords;
-        setRouteCoordinates((prev: any[]) => [...prev, { latitude, longitude }]);
-        setLocation(newLocation);
-        
-        if (lastLoc) {
-          const dist = getDistanceFromLatLonInMeters(lastLoc.latitude, lastLoc.longitude, latitude, longitude);
-          setDistance((prev) => prev + dist);
-        } else if (location) {
-           const dist = getDistanceFromLatLonInMeters(location.coords.latitude, location.coords.longitude, latitude, longitude);
-           setDistance((prev) => prev + dist);
-        }
-        lastLoc = { latitude, longitude };
+    try {
+      // Re-check permissions before starting
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Location permission is required to track your run.');
+        return;
       }
-    );
-    setLocationSubscription(sub);
+
+      setIsRunning(true);
+      setRouteCoordinates([]);
+      setDistance(0);
+      setDuration(0);
+
+      const interval = setInterval(() => {
+        setDuration((prev) => prev + 1);
+      }, 1000);
+      setTimerInterval(interval);
+
+      let lastLoc: any = null;
+      const sub = await Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.High,
+          timeInterval: 2000,
+          distanceInterval: 1,
+        },
+        (newLocation) => {
+          const { latitude, longitude } = newLocation.coords;
+          setRouteCoordinates((prev: any[]) => [...prev, { latitude, longitude }]);
+          setLocation(newLocation);
+          
+          if (lastLoc) {
+            const dist = getDistanceFromLatLonInMeters(lastLoc.latitude, lastLoc.longitude, latitude, longitude);
+            setDistance((prev) => prev + dist);
+          } else if (location) {
+             const dist = getDistanceFromLatLonInMeters(location.coords.latitude, location.coords.longitude, latitude, longitude);
+             setDistance((prev) => prev + dist);
+          }
+          lastLoc = { latitude, longitude };
+        }
+      );
+      setLocationSubscription(sub);
+    } catch (error) {
+      console.error('Failed to start run:', error);
+      setIsRunning(false);
+      Alert.alert('Error', 'Failed to start location tracking. Please ensure location permissions are granted and try again.');
+    }
   };
 
   const stopRun = async () => {
@@ -102,23 +115,55 @@ export default function RunTrackerScreen({ route, navigation }: any) {
       setLocationSubscription(null);
     }
 
-    const user = auth.currentUser;
-    // For testing/mocking realistic dashboard metrics, if distance is tiny, let's inject a fake run if they want.
-    // For actual production we just use the real distance. 
-    // We'll use the real calculated distance here:
-    const finalDist = distance > 0 ? distance : Math.random() * 5000 + 1000; // Mock 1km to 6km if GPS didn't move
-    const finalDuration = duration > 0 ? duration : Math.floor(Math.random() * 1800 + 600); // Mock 10m to 40m
+    try {
+      const user = auth.currentUser;
+      // For testing/mocking realistic dashboard metrics, if distance is tiny, let's inject a fake run if they want.
+      // For actual production we just use the real distance. 
+      // We'll use the real calculated distance here:
+      const finalDist = distance > 0 ? distance : Math.random() * 5000 + 1000; // Mock 1km to 6km if GPS didn't move
+      const finalDuration = duration > 0 ? duration : Math.floor(Math.random() * 1800 + 600); // Mock 10m to 40m
 
-    const distanceKm = finalDist / 1000;
-    const averagePaceSecondsPerKm = distanceKm > 0 ? finalDuration / distanceKm : 0;
-    const paceMinutes = Math.floor(averagePaceSecondsPerKm / 60);
-    const paceSeconds = Math.floor(averagePaceSecondsPerKm % 60);
-    const finalPaceStr = paceMinutes > 0 ? `${paceMinutes}'${paceSeconds.toString().padStart(2, '0')}"` : '--';
+      const distanceKm = finalDist / 1000;
+      const averagePaceSecondsPerKm = distanceKm > 0 ? finalDuration / distanceKm : 0;
+      const paceMinutes = Math.floor(averagePaceSecondsPerKm / 60);
+      const paceSeconds = Math.floor(averagePaceSecondsPerKm % 60);
+      const finalPaceStr = paceMinutes > 0 ? `${paceMinutes}'${paceSeconds.toString().padStart(2, '0')}"` : '--';
 
-    if (user) {
+      // Get userId — fallback to AsyncStorage if auth.currentUser is null (common when offline)
+      let userId = user?.uid;
+      let userName = user?.displayName || 'Anonymous personnel';
+      if (!userId) {
+        try {
+          const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+          const cachedUid = await AsyncStorage.getItem('@unifit_cached_uid');
+          const cachedName = await AsyncStorage.getItem('@unifit_cached_name');
+          if (cachedUid) {
+            userId = cachedUid;
+            userName = cachedName || 'Anonymous personnel';
+          }
+        } catch (e) {
+          console.error("Failed to read cached user info:", e);
+        }
+      } else {
+        // Cache the user info for offline use
+        try {
+          const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+          await AsyncStorage.setItem('@unifit_cached_uid', user.uid);
+          await AsyncStorage.setItem('@unifit_cached_name', user.displayName || 'Anonymous personnel');
+        } catch (e) {
+          // Non-critical, ignore
+        }
+      }
+
+      if (!userId) {
+        Alert.alert('Error', 'Unable to identify user. Please sign in and try again.');
+        navigation.goBack();
+        return;
+      }
+
       const payload = {
-        userId: user.uid,
-        userName: user.displayName || 'Anonymous personnel',
+        userId: userId,
+        userName: userName,
         distance: finalDist, // meters
         duration: finalDuration,  // seconds
         averagePace: finalPaceStr, // mm'ss"
@@ -128,7 +173,7 @@ export default function RunTrackerScreen({ route, navigation }: any) {
         missionTitle: missionTitle
       };
 
-      if (netInfo.isConnected) {
+      if (netInfo.isConnected === true) {
         try {
           const runsRef = ref(realtimeDb, 'runs');
           const newRunRef = push(runsRef);
@@ -136,13 +181,28 @@ export default function RunTrackerScreen({ route, navigation }: any) {
           Alert.alert('Run Saved!', `Distance: ${(finalDist/1000).toFixed(2)}km\nTime: ${formatTime(finalDuration)}`);
         } catch (err) {
           console.error("Failed to save run to Firebase:", err);
-          Alert.alert('Error', 'Failed to save run. Please check your connection.');
+          // Fallback to offline save if Firebase write fails
+          try {
+            await saveRunOffline(payload);
+            Alert.alert('Run Saved Offline!', `Distance: ${(finalDist/1000).toFixed(2)}km\nTime: ${formatTime(finalDuration)}\n\nYour run details will sync automatically when you reconnect.`);
+          } catch (offlineErr) {
+            console.error("Failed to save run offline:", offlineErr);
+            Alert.alert('Error', 'Failed to save run. Please try again.');
+          }
         }
       } else {
         // Offline Saving
-        await saveRunOffline(payload);
-        Alert.alert('Run Saved Offline!', `Distance: ${(finalDist/1000).toFixed(2)}km\nTime: ${formatTime(finalDuration)}\n\nYour run details will sync automatically when you reconnect.`);
+        try {
+          await saveRunOffline(payload);
+          Alert.alert('Run Saved Offline!', `Distance: ${(finalDist/1000).toFixed(2)}km\nTime: ${formatTime(finalDuration)}\n\nYour run details will sync automatically when you reconnect.`);
+        } catch (offlineErr) {
+          console.error("Failed to save run offline:", offlineErr);
+          Alert.alert('Error', 'Failed to save run locally. Please try again.');
+        }
       }
+    } catch (error) {
+      console.error("Critical error in stopRun:", error);
+      Alert.alert('Error', 'An unexpected error occurred while saving your run.');
     }
 
     navigation.goBack();
@@ -159,26 +219,17 @@ export default function RunTrackerScreen({ route, navigation }: any) {
     <View style={styles.container}>
       {location ? (
         <View style={styles.mapContainer}>
-          <MapView 
+          <OSMMapView
             style={styles.map}
-            initialRegion={{
+            center={{
               latitude: location.coords.latitude,
               longitude: location.coords.longitude,
-              latitudeDelta: 0.005,
-              longitudeDelta: 0.005,
             }}
-            showsUserLocation={true}
-            followsUserLocation={true}
-            showsMyLocationButton={false}
-            showsCompass={false}
-            customMapStyle={mapStyle}
-          >
-            <Polyline
-              coordinates={routeCoordinates}
-              strokeColor="#38bdf8"
-              strokeWidth={5}
-            />
-          </MapView>
+            routeCoordinates={routeCoordinates}
+            showUserLocation={true}
+            followUser={true}
+            zoom={16}
+          />
           
           {/* Subtle gradient overlay to fade into the stats panel */}
           <LinearGradient
@@ -527,78 +578,3 @@ const styles = StyleSheet.create({
   },
 });
 
-// Dark mode map styling array
-const mapStyle = [
-  {
-    "elementType": "geometry",
-    "stylers": [{"color": "#1d2c4d"}]
-  },
-  {
-    "elementType": "labels.text.fill",
-    "stylers": [{"color": "#8ec3b9"}]
-  },
-  {
-    "elementType": "labels.text.stroke",
-    "stylers": [{"color": "#1a3646"}]
-  },
-  {
-    "featureType": "administrative.country",
-    "elementType": "geometry.stroke",
-    "stylers": [{"color": "#4b6878"}]
-  },
-  {
-    "featureType": "administrative.land_parcel",
-    "elementType": "labels.text.fill",
-    "stylers": [{"color": "#64779e"}]
-  },
-  {
-    "featureType": "landscape.man_made",
-    "elementType": "geometry.stroke",
-    "stylers": [{"color": "#334e87"}]
-  },
-  {
-    "featureType": "landscape.natural",
-    "elementType": "geometry",
-    "stylers": [{"color": "#023e58"}]
-  },
-  {
-    "featureType": "poi",
-    "elementType": "geometry",
-    "stylers": [{"color": "#283d6a"}]
-  },
-  {
-    "featureType": "poi",
-    "elementType": "labels.text.fill",
-    "stylers": [{"color": "#6f9ba5"}]
-  },
-  {
-    "featureType": "poi",
-    "elementType": "labels.text.stroke",
-    "stylers": [{"color": "#1d2c4d"}]
-  },
-  {
-    "featureType": "road",
-    "elementType": "geometry",
-    "stylers": [{"color": "#304a7d"}]
-  },
-  {
-    "featureType": "road",
-    "elementType": "labels.text.fill",
-    "stylers": [{"color": "#98a5be"}]
-  },
-  {
-    "featureType": "road",
-    "elementType": "labels.text.stroke",
-    "stylers": [{"color": "#1d2c4d"}]
-  },
-  {
-    "featureType": "water",
-    "elementType": "geometry",
-    "stylers": [{"color": "#0e1626"}]
-  },
-  {
-    "featureType": "water",
-    "elementType": "labels.text.fill",
-    "stylers": [{"color": "#4e6d70"}]
-  }
-];

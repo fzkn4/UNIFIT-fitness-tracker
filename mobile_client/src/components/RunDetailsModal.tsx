@@ -1,9 +1,9 @@
-import React, { useRef, useEffect } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, Dimensions, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { LinearGradient } from 'expo-linear-gradient';
-import MapView, { Polyline } from 'react-native-maps';
+import OSMMapView from './OSMMapView';
 
 const { height } = Dimensions.get('window');
 
@@ -14,22 +14,6 @@ interface RunDetailsModalProps {
 }
 
 export default function RunDetailsModal({ visible, onClose, run }: RunDetailsModalProps) {
-  const mapRef = useRef<MapView>(null);
-
-  useEffect(() => {
-    if (visible && run && run.route && run.route.length > 0) {
-      // Zoom map to fit the route after a short delay to ensure map has mounted
-      setTimeout(() => {
-        if (mapRef.current) {
-          mapRef.current.fitToCoordinates(run.route, {
-            edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
-            animated: true,
-          });
-        }
-      }, 500);
-    }
-  }, [visible, run]);
-
   if (!run) return null;
 
   const formatActivityDate = (timestamp: number) => {
@@ -46,29 +30,17 @@ export default function RunDetailsModal({ visible, onClose, run }: RunDetailsMod
   };
 
   const getRunPace = (run: any) => {
-    // Some mock data has `time` instead of `duration`
     if (run.averagePace && run.averagePace !== '--') return run.averagePace;
     const duration = run.duration || run.time || 0;
     const distanceKm = run.distance / 1000;
-    
     if (distanceKm <= 0 || duration <= 0) return '--';
-    
     const avgPaceSeconds = duration / distanceKm;
     const paceMins = Math.floor(avgPaceSeconds / 60);
     const paceSecs = Math.floor(avgPaceSeconds % 60);
     return `${paceMins}'${paceSecs.toString().padStart(2, '0')}"`;
   };
 
-  // Check if we have valid coordinates array to draw
   const hasRoute = run.route && Array.isArray(run.route) && run.route.length > 0;
-
-  // Initial region for the map if there are coordinates, else try to use the very first one
-  const initialRegion = hasRoute ? {
-    latitude: run.route[0].latitude,
-    longitude: run.route[0].longitude,
-    latitudeDelta: 0.01,
-    longitudeDelta: 0.01,
-  } : undefined;
 
   return (
     <Modal
@@ -91,20 +63,17 @@ export default function RunDetailsModal({ visible, onClose, run }: RunDetailsMod
           {/* Map Section */}
           <View style={styles.mapContainer}>
             {hasRoute ? (
-              <MapView
-                ref={mapRef}
+              <OSMMapView
                 style={styles.map}
-                initialRegion={initialRegion}
-                customMapStyle={mapStyle}
-                showsUserLocation={false}
-                pitchEnabled={false}
-              >
-                <Polyline
-                  coordinates={run.route}
-                  strokeColor="#38bdf8"
-                  strokeWidth={5}
-                />
-              </MapView>
+                center={{
+                  latitude: run.route[0].latitude,
+                  longitude: run.route[0].longitude,
+                }}
+                routeCoordinates={run.route}
+                fitRoute={true}
+                interactive={true}
+                zoom={15}
+              />
             ) : (
                 <View style={styles.noRouteContainer}>
                    <Ionicons name="map-outline" size={48} color={colors.mutedForeground} style={{marginBottom: 16}} />
@@ -346,21 +315,3 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   }
 });
-
-const mapStyle = [
-  { "elementType": "geometry", "stylers": [{"color": "#1d2c4d"}] },
-  { "elementType": "labels.text.fill", "stylers": [{"color": "#8ec3b9"}] },
-  { "elementType": "labels.text.stroke", "stylers": [{"color": "#1a3646"}] },
-  { "featureType": "administrative.country", "elementType": "geometry.stroke", "stylers": [{"color": "#4b6878"}] },
-  { "featureType": "administrative.land_parcel", "elementType": "labels.text.fill", "stylers": [{"color": "#64779e"}] },
-  { "featureType": "landscape.man_made", "elementType": "geometry.stroke", "stylers": [{"color": "#334e87"}] },
-  { "featureType": "landscape.natural", "elementType": "geometry", "stylers": [{"color": "#023e58"}] },
-  { "featureType": "poi", "elementType": "geometry", "stylers": [{"color": "#283d6a"}] },
-  { "featureType": "poi", "elementType": "labels.text.fill", "stylers": [{"color": "#6f9ba5"}] },
-  { "featureType": "poi", "elementType": "labels.text.stroke", "stylers": [{"color": "#1d2c4d"}] },
-  { "featureType": "road", "elementType": "geometry", "stylers": [{"color": "#304a7d"}] },
-  { "featureType": "road", "elementType": "labels.text.fill", "stylers": [{"color": "#98a5be"}] },
-  { "featureType": "road", "elementType": "labels.text.stroke", "stylers": [{"color": "#1d2c4d"}] },
-  { "featureType": "water", "elementType": "geometry", "stylers": [{"color": "#0e1626"}] },
-  { "featureType": "water", "elementType": "labels.text.fill", "stylers": [{"color": "#4e6d70"}] }
-];

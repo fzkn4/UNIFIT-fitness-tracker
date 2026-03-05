@@ -16,11 +16,17 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#111827",
         "foregroundImage": "./assets/icon.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.fzkn4.mobile_client"
+      "package": "com.fzkn4.mobile_client",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -29,6 +35,19 @@
       "eas": {
         "projectId": "696fe814-5b4b-4e8f-9917-1dbf1a24c544"
       }
-    }
+    },
+    "plugins": [
+      "expo-font",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Unifit to use your location to track your running routes.",
+          "locationAlwaysPermission": "Allow Unifit to use your location to track your running routes.",
+          "locationWhenInUsePermission": "Allow Unifit to use your location to track your running routes.",
+          "isAndroidForegroundServiceEnabled": true,
+          "isAndroidBackgroundLocationEnabled": false
+        }
+      ]
+    ]
   }
 }
