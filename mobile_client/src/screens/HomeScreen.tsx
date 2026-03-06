@@ -269,6 +269,32 @@ export default function HomeScreen({ navigation }: any) {
           </LinearGradient>
         </TouchableOpacity>
 
+        {/* My Stats Card */}
+        <TouchableOpacity 
+          style={[styles.recordCardTouch, { shadowColor: '#f59e0b', marginBottom: 24 }]} 
+          onPress={() => navigation.navigate('Stats')}
+          activeOpacity={0.9}
+        >
+          <LinearGradient
+            colors={['#f59e0b', '#fbbf24']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.recordCard}
+          >
+            <View style={styles.recordCardInner}>
+              <View style={styles.recordTextContainer}>
+                <Text style={styles.recordTitle}>My Stats</Text>
+                <Text style={styles.recordSubtitle}>View body metrics and fitness trends.</Text>
+              </View>
+              <View style={styles.playButton}>
+                <Ionicons name="stats-chart" size={26} color="#f59e0b" />
+              </View>
+            </View>
+            
+            <Ionicons name="body" size={140} color="rgba(255,255,255,0.15)" style={styles.cardBgIcon} />
+          </LinearGradient>
+        </TouchableOpacity>
+
         {/* Weekly Stats Summary */}
         <View style={styles.statsRow}>
           <View style={styles.statBox}>

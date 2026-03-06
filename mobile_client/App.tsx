@@ -10,6 +10,7 @@ import HomeScreen from './src/screens/HomeScreen';
 import RunTrackerScreen from './src/screens/RunTrackerScreen';
 import RoutinesScreen from './src/screens/RoutinesScreen';
 import RunHistoryScreen from './src/screens/RunHistoryScreen';
+import StatsScreen from './src/screens/StatsScreen';
 import { colors } from './src/theme/colors';
 
 const Stack = createNativeStackNavigator();
@@ -59,6 +60,11 @@ export default function App() {
           <Stack.Screen
             name="RunHistory"
             component={RunHistoryScreen as any}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="Stats"
+            component={StatsScreen as any}
             options={{ headerShown: false }}
           />
         </Stack.Navigator>
