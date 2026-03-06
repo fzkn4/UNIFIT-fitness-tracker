@@ -24,6 +24,7 @@
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
         "FOREGROUND_SERVICE",
         "FOREGROUND_SERVICE_LOCATION"
       ]
@@ -45,7 +46,7 @@
           "locationAlwaysPermission": "Allow Unifit to use your location to track your running routes.",
           "locationWhenInUsePermission": "Allow Unifit to use your location to track your running routes.",
           "isAndroidForegroundServiceEnabled": true,
-          "isAndroidBackgroundLocationEnabled": false
+          "isAndroidBackgroundLocationEnabled": true
         }
       ]
     ]

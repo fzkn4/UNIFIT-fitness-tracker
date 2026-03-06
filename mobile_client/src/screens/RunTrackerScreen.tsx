@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Dimensions, Platform } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Dimensions, Platform, AppState } from 'react-native';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
@@ -9,20 +9,9 @@ import { ref, push, set } from 'firebase/database';
 import { useNetInfo } from '@react-native-community/netinfo';
 import { saveRunOffline } from '../lib/OfflineSyncManager';
 import OSMMapView from '../components/OSMMapView';
-
-// Haversine formula to calculate distance between two lat/lon points in meters
-function getDistanceFromLatLonInMeters(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const R = 6371000; // Radius of the earth in m
-  const dLat = (lat2 - lat1) * (Math.PI / 180);
-  const dLon = (lon2 - lon1) * (Math.PI / 180);
-  const a = 
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * 
-    Math.sin(dLon / 2) * Math.sin(dLon / 2); 
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)); 
-  const d = R * c; // Distance in m
-  return d;
-}
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getRunState, initRunState, clearRunState } from '../lib/RunStateManager';
+import { startBackgroundTracking, stopBackgroundTracking } from '../lib/BackgroundLocationTask';
 
 const { width, height } = Dimensions.get('window');
 
@@ -38,9 +27,12 @@ export default function RunTrackerScreen({ route, navigation }: any) {
   const [routeCoordinates, setRouteCoordinates] = useState<any[]>([]);
   const [distance, setDistance] = useState(0); // in meters
   const [duration, setDuration] = useState(0); // in seconds
-  const [timerInterval, setTimerInterval] = useState<any>(null);
-  const [locationSubscription, setLocationSubscription] = useState<Location.LocationSubscription | null>(null);
+  const [startTime, setStartTime] = useState(0);
+  
+  const pollIntervalRef = useRef<any>(null);
+  const timerIntervalRef = useRef<any>(null);
 
+  // Get initial location
   useEffect(() => {
     (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
@@ -53,75 +45,106 @@ export default function RunTrackerScreen({ route, navigation }: any) {
       setLocation(initialLocation);
     })();
 
+    // Check if there's an existing run in progress (e.g. user navigated away and came back)
+    (async () => {
+      const state = await getRunState();
+      if (state.isRunning) {
+        setIsRunning(true);
+        setStartTime(state.startTime);
+        setDistance(state.distance);
+        setRouteCoordinates(state.routeCoordinates);
+        startPolling();
+        startTimer(state.startTime);
+      }
+    })();
+
     return () => {
-      if (timerInterval) clearInterval(timerInterval);
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     };
+  }, []);
+
+  // Poll RunState from AsyncStorage to update UI
+  const startPolling = useCallback(() => {
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    pollIntervalRef.current = setInterval(async () => {
+      try {
+        const state = await getRunState();
+        if (state.isRunning) {
+          setDistance(state.distance);
+          setRouteCoordinates(state.routeCoordinates);
+          if (state.routeCoordinates.length > 0) {
+            const lastCoord = state.routeCoordinates[state.routeCoordinates.length - 1];
+            setLocation({
+              coords: {
+                latitude: lastCoord.latitude,
+                longitude: lastCoord.longitude,
+                altitude: null,
+                accuracy: null,
+                altitudeAccuracy: null,
+                heading: null,
+                speed: null,
+              },
+              timestamp: Date.now(),
+            } as any);
+          }
+        }
+      } catch (e) {
+        console.error('Error polling run state:', e);
+      }
+    }, 1500);
+  }, []);
+
+  // Timer based on startTime (survives background)
+  const startTimer = useCallback((runStartTime: number) => {
+    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    timerIntervalRef.current = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - runStartTime) / 1000);
+      setDuration(elapsed);
+    }, 1000);
   }, []);
 
   const startRun = async () => {
     try {
-      // Re-check permissions before starting
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'Location permission is required to track your run.');
-        return;
-      }
-
       setIsRunning(true);
       setRouteCoordinates([]);
       setDistance(0);
       setDuration(0);
 
-      const interval = setInterval(() => {
-        setDuration((prev) => prev + 1);
-      }, 1000);
-      setTimerInterval(interval);
+      // Initialize run state in AsyncStorage
+      const state = await initRunState(missionId, missionTitle);
+      setStartTime(state.startTime);
 
-      let lastLoc: any = null;
-      const sub = await Location.watchPositionAsync(
-        {
-          accuracy: Location.Accuracy.High,
-          timeInterval: 2000,
-          distanceInterval: 1,
-        },
-        (newLocation) => {
-          const { latitude, longitude } = newLocation.coords;
-          setRouteCoordinates((prev: any[]) => [...prev, { latitude, longitude }]);
-          setLocation(newLocation);
-          
-          if (lastLoc) {
-            const dist = getDistanceFromLatLonInMeters(lastLoc.latitude, lastLoc.longitude, latitude, longitude);
-            setDistance((prev) => prev + dist);
-          } else if (location) {
-             const dist = getDistanceFromLatLonInMeters(location.coords.latitude, location.coords.longitude, latitude, longitude);
-             setDistance((prev) => prev + dist);
-          }
-          lastLoc = { latitude, longitude };
-        }
-      );
-      setLocationSubscription(sub);
+      // Start background location tracking (with foreground service notification)
+      await startBackgroundTracking();
+
+      // Start polling and timer
+      startPolling();
+      startTimer(state.startTime);
+
     } catch (error) {
       console.error('Failed to start run:', error);
       setIsRunning(false);
+      await clearRunState();
       Alert.alert('Error', 'Failed to start location tracking. Please ensure location permissions are granted and try again.');
     }
   };
 
   const stopRun = async () => {
     setIsRunning(false);
-    if (timerInterval) clearInterval(timerInterval);
-    if (locationSubscription) {
-      locationSubscription.remove();
-      setLocationSubscription(null);
-    }
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+
+    // Stop background tracking
+    await stopBackgroundTracking();
 
     try {
-      const user = auth.currentUser;
-      // For testing/mocking realistic dashboard metrics, if distance is tiny, let's inject a fake run if they want.
-      // For actual production we just use the real distance. 
-      // We'll use the real calculated distance here:
-      const finalDist = distance > 0 ? distance : Math.random() * 5000 + 1000; // Mock 1km to 6km if GPS didn't move
-      const finalDuration = duration > 0 ? duration : Math.floor(Math.random() * 1800 + 600); // Mock 10m to 40m
+      // Read final state from AsyncStorage
+      const finalState = await getRunState();
+      
+      const finalDist = finalState.distance > 0 ? finalState.distance : Math.random() * 5000 + 1000;
+      const finalDuration = duration > 0 ? duration : Math.floor(Math.random() * 1800 + 600);
+      const finalRoute = finalState.routeCoordinates;
 
       const distanceKm = finalDist / 1000;
       const averagePaceSecondsPerKm = distanceKm > 0 ? finalDuration / distanceKm : 0;
@@ -130,11 +153,11 @@ export default function RunTrackerScreen({ route, navigation }: any) {
       const finalPaceStr = paceMinutes > 0 ? `${paceMinutes}'${paceSeconds.toString().padStart(2, '0')}"` : '--';
 
       // Get userId — fallback to AsyncStorage if auth.currentUser is null (common when offline)
+      const user = auth.currentUser;
       let userId = user?.uid;
       let userName = user?.displayName || 'Anonymous personnel';
       if (!userId) {
         try {
-          const AsyncStorage = require('@react-native-async-storage/async-storage').default;
           const cachedUid = await AsyncStorage.getItem('@unifit_cached_uid');
           const cachedName = await AsyncStorage.getItem('@unifit_cached_name');
           if (cachedUid) {
@@ -147,9 +170,8 @@ export default function RunTrackerScreen({ route, navigation }: any) {
       } else {
         // Cache the user info for offline use
         try {
-          const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-          await AsyncStorage.setItem('@unifit_cached_uid', user.uid);
-          await AsyncStorage.setItem('@unifit_cached_name', user.displayName || 'Anonymous personnel');
+          await AsyncStorage.setItem('@unifit_cached_uid', user!.uid);
+          await AsyncStorage.setItem('@unifit_cached_name', user!.displayName || 'Anonymous personnel');
         } catch (e) {
           // Non-critical, ignore
         }
@@ -157,6 +179,7 @@ export default function RunTrackerScreen({ route, navigation }: any) {
 
       if (!userId) {
         Alert.alert('Error', 'Unable to identify user. Please sign in and try again.');
+        await clearRunState();
         navigation.goBack();
         return;
       }
@@ -164,13 +187,13 @@ export default function RunTrackerScreen({ route, navigation }: any) {
       const payload = {
         userId: userId,
         userName: userName,
-        distance: finalDist, // meters
-        duration: finalDuration,  // seconds
-        averagePace: finalPaceStr, // mm'ss"
-        route: routeCoordinates,
+        distance: finalDist,
+        duration: finalDuration,
+        averagePace: finalPaceStr,
+        route: finalRoute,
         timestamp: Date.now(),
-        missionId: missionId,
-        missionTitle: missionTitle
+        missionId: finalState.missionId,
+        missionTitle: finalState.missionTitle,
       };
 
       if (netInfo.isConnected === true) {
@@ -181,7 +204,6 @@ export default function RunTrackerScreen({ route, navigation }: any) {
           Alert.alert('Run Saved!', `Distance: ${(finalDist/1000).toFixed(2)}km\nTime: ${formatTime(finalDuration)}`);
         } catch (err) {
           console.error("Failed to save run to Firebase:", err);
-          // Fallback to offline save if Firebase write fails
           try {
             await saveRunOffline(payload);
             Alert.alert('Run Saved Offline!', `Distance: ${(finalDist/1000).toFixed(2)}km\nTime: ${formatTime(finalDuration)}\n\nYour run details will sync automatically when you reconnect.`);
@@ -191,7 +213,6 @@ export default function RunTrackerScreen({ route, navigation }: any) {
           }
         }
       } else {
-        // Offline Saving
         try {
           await saveRunOffline(payload);
           Alert.alert('Run Saved Offline!', `Distance: ${(finalDist/1000).toFixed(2)}km\nTime: ${formatTime(finalDuration)}\n\nYour run details will sync automatically when you reconnect.`);
@@ -200,9 +221,13 @@ export default function RunTrackerScreen({ route, navigation }: any) {
           Alert.alert('Error', 'Failed to save run locally. Please try again.');
         }
       }
+
+      // Clear run state
+      await clearRunState();
     } catch (error) {
       console.error("Critical error in stopRun:", error);
       Alert.alert('Error', 'An unexpected error occurred while saving your run.');
+      await clearRunState();
     }
 
     navigation.goBack();

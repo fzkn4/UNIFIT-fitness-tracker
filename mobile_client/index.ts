@@ -1,5 +1,9 @@
 import { registerRootComponent } from 'expo';
 
+// IMPORTANT: Must import background task at global scope so TaskManager.defineTask
+// runs before any component mounts. Required for headless JS background execution.
+import './src/lib/BackgroundLocationTask';
+
 import App from './App';
 
 // registerRootComponent calls AppRegistry.registerComponent('main', () => App);
