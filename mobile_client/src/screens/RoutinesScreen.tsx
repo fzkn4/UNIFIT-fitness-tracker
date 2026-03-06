@@ -214,24 +214,24 @@ export default function RoutinesScreen({ navigation }: any) {
         <View style={styles.missionHeader}>
           <Text style={styles.missionTitle}>{mission.title}</Text>
           
-          {mission.routineType === 'once' ? (
-            <View style={[styles.badgeContainer, { backgroundColor: 'rgba(56,189,248,0.1)', borderColor: 'rgba(56,189,248,0.3)' }]}>
-              <Ionicons name="calendar-outline" size={12} color={colors.primary} />
-              <Text style={[styles.badgeText, { color: colors.primary }]}>
-                Due: {mission.deadline ? formatDate(mission.deadline) : 'No date'}
-              </Text>
-            </View>
-          ) : (
-            <View style={[styles.badgeContainer, { backgroundColor: 'rgba(139,92,246,0.1)', borderColor: 'rgba(139,92,246,0.3)' }]}>
-              <Ionicons name="repeat-outline" size={12} color="#8b5cf6" />
-              <Text style={[styles.badgeText, { color: "#8b5cf6" }]}>
-                {mission.routineType.charAt(0).toUpperCase() + mission.routineType.slice(1)}
-              </Text>
-            </View>
-          )}
-          
-          {/* Mode badges */}
-          <View style={{ flexDirection: 'row', gap: 6, marginTop: 6 }}>
+          {/* Badges Row */}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+            {mission.routineType === 'once' ? (
+              <View style={[styles.badgeContainer, { backgroundColor: 'rgba(56,189,248,0.1)', borderColor: 'rgba(56,189,248,0.3)' }]}>
+                <Ionicons name="calendar-outline" size={12} color={colors.primary} />
+                <Text style={[styles.badgeText, { color: colors.primary }]}>
+                  Due: {mission.deadline ? formatDate(mission.deadline) : 'No date'}
+                </Text>
+              </View>
+            ) : (
+              <View style={[styles.badgeContainer, { backgroundColor: 'rgba(139,92,246,0.1)', borderColor: 'rgba(139,92,246,0.3)' }]}>
+                <Ionicons name="repeat-outline" size={12} color="#8b5cf6" />
+                <Text style={[styles.badgeText, { color: "#8b5cf6" }]}>
+                  {mission.routineType.charAt(0).toUpperCase() + mission.routineType.slice(1)}
+                </Text>
+              </View>
+            )}
+            
             {(mission.allowedModes || ['running']).includes('running') && (
               <View style={[styles.badgeContainer, { backgroundColor: 'rgba(16,185,129,0.1)', borderColor: 'rgba(16,185,129,0.3)' }]}>
                 <Ionicons name="walk" size={12} color="#10b981" />
