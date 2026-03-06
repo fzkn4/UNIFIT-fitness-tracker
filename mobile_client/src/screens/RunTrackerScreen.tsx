@@ -21,6 +21,9 @@ export default function RunTrackerScreen({ route, navigation }: any) {
   // Extract routine info if navigated from RoutinesScreen
   const missionId = route?.params?.missionId || null;
   const missionTitle = route?.params?.missionTitle || null;
+  const missionAllowedModes: ('running' | 'cycling')[] = route?.params?.allowedModes || ['running', 'cycling'];
+
+  const [activityMode, setActivityMode] = useState<'running' | 'cycling'>(missionAllowedModes[0] || 'running');
 
   const [isRunning, setIsRunning] = useState(false);
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
@@ -53,6 +56,7 @@ export default function RunTrackerScreen({ route, navigation }: any) {
         setIsRunning(true);
         setStartTime(state.startTime);
         setDistance(state.distance);
+        setActivityMode(state.activityMode || 'running');
         setRouteCoordinates(state.routeCoordinates);
         startPolling();
         startTimer(state.startTime);
@@ -115,7 +119,7 @@ export default function RunTrackerScreen({ route, navigation }: any) {
       setMovingTime(0);
 
       // Initialize run state in AsyncStorage
-      const state = await initRunState(missionId, missionTitle);
+      const state = await initRunState(missionId, missionTitle, activityMode);
       setStartTime(state.startTime);
 
       // Start background location tracking (with foreground service notification)
@@ -194,6 +198,7 @@ export default function RunTrackerScreen({ route, navigation }: any) {
         distance: finalDist,
         duration: finalDuration,
         movingTime: finalMovingTime,
+        activityMode: finalState.activityMode || 'running',
         averagePace: finalPaceStr,
         route: finalRoute,
         timestamp: Date.now(),
@@ -290,7 +295,7 @@ export default function RunTrackerScreen({ route, navigation }: any) {
         >
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
-        <Text style={styles.topHeader}>Active Run</Text>
+        <Text style={styles.topHeader}>{isRunning ? (activityMode === 'cycling' ? 'Active Ride' : 'Active Run') : 'Start Activity'}</Text>
         <View style={netInfo.isConnected ? styles.gpsIndicator : styles.offlineIndicator}>
           <View style={netInfo.isConnected ? styles.gpsDot : styles.offlineDot} />
           <Text style={netInfo.isConnected ? styles.gpsText : styles.offlineText}>
@@ -341,14 +346,47 @@ export default function RunTrackerScreen({ route, navigation }: any) {
 
         <View style={styles.controlsContainer}>
           {!isRunning ? (
-            <TouchableOpacity style={styles.actionBtnTouch} onPress={startRun}>
-              <LinearGradient
-                colors={['#0284c7', '#38bdf8']}
-                style={styles.startBtn}
-              >
-                <Text style={styles.startBtnText}>START OUTDOOR RUN</Text>
-              </LinearGradient>
-            </TouchableOpacity>
+            <View>
+              {/* Mode Selector */}
+              {missionAllowedModes.length > 1 && (
+                <View style={styles.modeSelectorRow}>
+                  {missionAllowedModes.includes('running') && (
+                    <TouchableOpacity
+                      style={[
+                        styles.modeOption,
+                        activityMode === 'running' && styles.modeOptionActive,
+                      ]}
+                      onPress={() => setActivityMode('running')}
+                    >
+                      <Ionicons name="walk" size={22} color={activityMode === 'running' ? '#10b981' : '#64748b'} />
+                      <Text style={[styles.modeOptionText, activityMode === 'running' && styles.modeOptionTextActive]}>Running</Text>
+                    </TouchableOpacity>
+                  )}
+                  {missionAllowedModes.includes('cycling') && (
+                    <TouchableOpacity
+                      style={[
+                        styles.modeOption,
+                        activityMode === 'cycling' && styles.modeOptionActiveCycling,
+                      ]}
+                      onPress={() => setActivityMode('cycling')}
+                    >
+                      <Ionicons name="bicycle" size={22} color={activityMode === 'cycling' ? '#f59e0b' : '#64748b'} />
+                      <Text style={[styles.modeOptionText, activityMode === 'cycling' && styles.modeOptionTextActiveCycling]}>Cycling</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+              <TouchableOpacity style={styles.actionBtnTouch} onPress={startRun}>
+                <LinearGradient
+                  colors={activityMode === 'cycling' ? ['#d97706', '#f59e0b'] : ['#0284c7', '#38bdf8']}
+                  style={styles.startBtn}
+                >
+                  <Text style={styles.startBtnText}>
+                    {activityMode === 'cycling' ? 'START OUTDOOR RIDE' : 'START OUTDOOR RUN'}
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
           ) : (
             <View style={styles.activeControlsRow}>
               <TouchableOpacity style={styles.pauseBtn}>
@@ -610,6 +648,42 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
     letterSpacing: 1,
+  },
+  modeSelectorRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 12,
+  },
+  modeOption: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 16,
+    backgroundColor: 'rgba(30,41,59,0.6)',
+    borderWidth: 1,
+    borderColor: 'rgba(51,65,85,0.5)',
+  },
+  modeOptionActive: {
+    backgroundColor: 'rgba(16,185,129,0.12)',
+    borderColor: 'rgba(16,185,129,0.4)',
+  },
+  modeOptionActiveCycling: {
+    backgroundColor: 'rgba(245,158,11,0.12)',
+    borderColor: 'rgba(245,158,11,0.4)',
+  },
+  modeOptionText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  modeOptionTextActive: {
+    color: '#10b981',
+  },
+  modeOptionTextActiveCycling: {
+    color: '#f59e0b',
   },
 });
 

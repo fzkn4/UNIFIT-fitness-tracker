@@ -106,10 +106,10 @@ export default function RunHistoryScreen({ navigation }: any) {
             >
               <View style={styles.activityIconContainer}>
                 <LinearGradient
-                  colors={run.missionId ? ['rgba(139,92,246,0.2)', 'rgba(139,92,246,0.05)'] : ['rgba(56,189,248,0.2)', 'rgba(56,189,248,0.05)']}
-                  style={[styles.activityIconBg, run.missionId ? { borderColor: 'rgba(139,92,246,0.3)' } : null]}
+                  colors={run.activityMode === 'cycling' ? ['rgba(245,158,11,0.2)', 'rgba(245,158,11,0.05)'] : (run.missionId ? ['rgba(139,92,246,0.2)', 'rgba(139,92,246,0.05)'] : ['rgba(56,189,248,0.2)', 'rgba(56,189,248,0.05)'])}
+                  style={[styles.activityIconBg, run.missionId ? { borderColor: 'rgba(139,92,246,0.3)' } : null, run.activityMode === 'cycling' ? { borderColor: 'rgba(245,158,11,0.3)' } : null]}
                 >
-                  <Ionicons name={run.missionId ? "flag" : "walk"} size={22} color={run.missionId ? "#8b5cf6" : colors.primary} />
+                  <Ionicons name={run.activityMode === 'cycling' ? 'bicycle' : (run.missionId ? 'flag' : 'walk')} size={22} color={run.activityMode === 'cycling' ? '#f59e0b' : (run.missionId ? '#8b5cf6' : colors.primary)} />
                 </LinearGradient>
               </View>
               <View style={styles.activityInfo}>

@@ -17,7 +17,9 @@ import {
   Trash2,
   X,
   Calendar,
-  Repeat
+  Repeat,
+  Bike,
+  Footprints
 } from 'lucide-react';
 import { auth, realtimeDb } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -34,6 +36,7 @@ interface Mission {
   status: 'active' | 'draft';
   assignedPersonnel: string[]; // Mock initials for now
   routineType: 'once' | 'daily' | 'weekly' | 'monthly';
+  allowedModes?: ('running' | 'cycling')[]; // which activity modes are allowed
   deadline?: string; // e.g YYYY-MM-DD
   adminId: string;
   createdAt: number;
@@ -64,6 +67,7 @@ export default function MissionsAndRoutes() {
   const [isRecurring, setIsRecurring] = useState(false);
   const [newRoutine, setNewRoutine] = useState<'once'|'daily'|'weekly'|'monthly'>('once');
   const [newDeadline, setNewDeadline] = useState('');
+  const [allowedModes, setAllowedModes] = useState<('running' | 'cycling')[]>(['running']);
 
   // Assign Personnel Modal State
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
@@ -176,6 +180,7 @@ export default function MissionsAndRoutes() {
         status: newStatus,
         assignedPersonnel: [], // Starts with nobody assigned
         routineType: newRoutine,
+        allowedModes: allowedModes,
         deadline: newRoutine === 'once' ? newDeadline : null,
         adminId: adminUid,
         createdAt: Date.now()
@@ -195,6 +200,7 @@ export default function MissionsAndRoutes() {
       setIsRecurring(false);
       setNewRoutine('once');
       setNewDeadline('');
+      setAllowedModes(['running']);
       
       // Switch to appropriate tab
       setActiveTab(newStatus === 'active' ? 'active' : 'library');
@@ -435,6 +441,18 @@ export default function MissionsAndRoutes() {
                       <span className="text-xs font-medium text-slate-300 truncate">
                         {mission.location || 'Anywhere'}
                       </span>
+                      <div className="ml-auto flex items-center gap-1">
+                        {(mission.allowedModes || ['running']).includes('running') && (
+                          <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                            <Footprints className="w-3 h-3" />
+                          </span>
+                        )}
+                        {(mission.allowedModes || ['running']).includes('cycling') && (
+                          <span className="flex items-center gap-1 text-[10px] font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                            <Bike className="w-3 h-3" />
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     <div className="mt-auto grid grid-cols-2 gap-4 pb-4 border-b border-slate-800/80">
@@ -656,6 +674,50 @@ export default function MissionsAndRoutes() {
                     </select>
                   </div>
                 )}
+              </div>
+
+              {/* Activity Modes Section */}
+              <div className="p-4 bg-slate-800/30 border border-slate-800/80 rounded-xl space-y-3">
+                <label className="block text-sm font-medium text-slate-300">Activity Modes</label>
+                <p className="text-xs text-slate-500">Select which activity types are allowed for this mission.</p>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (allowedModes.includes('running')) {
+                        if (allowedModes.length > 1) setAllowedModes(allowedModes.filter(m => m !== 'running'));
+                      } else {
+                        setAllowedModes([...allowedModes, 'running']);
+                      }
+                    }}
+                    className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-all border ${
+                      allowedModes.includes('running')
+                        ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30 ring-1 ring-emerald-500/20'
+                        : 'bg-slate-900 text-slate-500 border-slate-700 hover:text-slate-300'
+                    }`}
+                  >
+                    <Footprints className="w-5 h-5" />
+                    Running
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (allowedModes.includes('cycling')) {
+                        if (allowedModes.length > 1) setAllowedModes(allowedModes.filter(m => m !== 'cycling'));
+                      } else {
+                        setAllowedModes([...allowedModes, 'cycling']);
+                      }
+                    }}
+                    className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-all border ${
+                      allowedModes.includes('cycling')
+                        ? 'bg-amber-500/15 text-amber-400 border-amber-500/30 ring-1 ring-amber-500/20'
+                        : 'bg-slate-900 text-slate-500 border-slate-700 hover:text-slate-300'
+                    }`}
+                  >
+                    <Bike className="w-5 h-5" />
+                    Cycling
+                  </button>
+                </div>
               </div>
 
               <div>

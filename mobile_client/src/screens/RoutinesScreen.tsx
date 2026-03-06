@@ -26,6 +26,7 @@ interface Mission {
   status: 'active' | 'draft';
   assignedPersonnel: string[];
   routineType: 'once' | 'daily' | 'weekly' | 'monthly';
+  allowedModes?: ('running' | 'cycling')[];
   deadline?: string;
   adminId: string;
   createdAt: number;
@@ -228,6 +229,22 @@ export default function RoutinesScreen({ navigation }: any) {
               </Text>
             </View>
           )}
+          
+          {/* Mode badges */}
+          <View style={{ flexDirection: 'row', gap: 6, marginTop: 6 }}>
+            {(mission.allowedModes || ['running']).includes('running') && (
+              <View style={[styles.badgeContainer, { backgroundColor: 'rgba(16,185,129,0.1)', borderColor: 'rgba(16,185,129,0.3)' }]}>
+                <Ionicons name="walk" size={12} color="#10b981" />
+                <Text style={[styles.badgeText, { color: '#10b981' }]}>Running</Text>
+              </View>
+            )}
+            {(mission.allowedModes || ['running']).includes('cycling') && (
+              <View style={[styles.badgeContainer, { backgroundColor: 'rgba(245,158,11,0.1)', borderColor: 'rgba(245,158,11,0.3)' }]}>
+                <Ionicons name="bicycle" size={12} color="#f59e0b" />
+                <Text style={[styles.badgeText, { color: '#f59e0b' }]}>Cycling</Text>
+              </View>
+            )}
+          </View>
         </View>
 
         {/* Location */}
@@ -292,7 +309,8 @@ export default function RoutinesScreen({ navigation }: any) {
               style={[styles.startButton, { backgroundColor: 'rgba(16,185,129,0.2)' }]}
               onPress={() => navigation.navigate('RunTracker', {
                 missionId: mission.id,
-                missionTitle: mission.title 
+                missionTitle: mission.title,
+                allowedModes: mission.allowedModes || ['running'],
               })}
             >
               <Ionicons name="checkmark-circle" size={16} color="#10b981" />
@@ -305,7 +323,8 @@ export default function RoutinesScreen({ navigation }: any) {
               style={[styles.startButton, isStarted ? { backgroundColor: '#f59e0b' } : {}]}
               onPress={() => navigation.navigate('RunTracker', {
                  missionId: mission.id,
-                 missionTitle: mission.title 
+                 missionTitle: mission.title,
+                 allowedModes: mission.allowedModes || ['running'],
               })}
             >
               <Text style={styles.startButtonText}>

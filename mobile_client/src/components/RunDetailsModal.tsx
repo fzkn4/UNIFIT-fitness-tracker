@@ -92,7 +92,25 @@ export default function RunDetailsModal({ visible, onClose, run }: RunDetailsMod
               <View style={styles.titleRow}>
                  <View style={{ flex: 1 }}>
                    <Text style={styles.runTitle} numberOfLines={1}>{run.missionTitle ? run.missionTitle : 'Outdoor Run'}</Text>
-                   <Text style={styles.runDate}>{formatActivityDate(run.timestamp)}</Text>
+                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                     <Text style={styles.runDate}>{formatActivityDate(run.timestamp)}</Text>
+                     <View style={{
+                       flexDirection: 'row', alignItems: 'center', gap: 4,
+                       backgroundColor: (run.activityMode === 'cycling') ? 'rgba(245,158,11,0.1)' : 'rgba(16,185,129,0.1)',
+                       borderWidth: 1,
+                       borderColor: (run.activityMode === 'cycling') ? 'rgba(245,158,11,0.3)' : 'rgba(16,185,129,0.3)',
+                       borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2,
+                     }}>
+                       <Ionicons
+                         name={(run.activityMode === 'cycling') ? 'bicycle' : 'walk'}
+                         size={12}
+                         color={(run.activityMode === 'cycling') ? '#f59e0b' : '#10b981'}
+                       />
+                       <Text style={{ fontSize: 10, fontWeight: '700', color: (run.activityMode === 'cycling') ? '#f59e0b' : '#10b981' }}>
+                         {(run.activityMode === 'cycling') ? 'Cycling' : 'Running'}
+                       </Text>
+                     </View>
+                   </View>
                  </View>
                  <View style={styles.iconBadge}>
                     <Ionicons name={run.missionId ? "flag" : "walk"} size={24} color={run.missionId ? "#8b5cf6" : colors.primary} />

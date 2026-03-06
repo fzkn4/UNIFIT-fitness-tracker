@@ -8,6 +8,7 @@ export interface RunState {
   distance: number; // meters
   movingTime: number; // seconds of actual movement
   lastTimestamp: number; // epoch ms of last GPS update
+  activityMode: 'running' | 'cycling';
   routeCoordinates: { latitude: number; longitude: number }[];
   lastLatitude: number | null;
   lastLongitude: number | null;
@@ -21,6 +22,7 @@ const DEFAULT_STATE: RunState = {
   distance: 0,
   movingTime: 0,
   lastTimestamp: 0,
+  activityMode: 'running',
   routeCoordinates: [],
   lastLatitude: null,
   lastLongitude: null,
@@ -54,13 +56,14 @@ export const clearRunState = async (): Promise<void> => {
   }
 };
 
-export const initRunState = async (missionId: string | null, missionTitle: string | null): Promise<RunState> => {
+export const initRunState = async (missionId: string | null, missionTitle: string | null, activityMode: 'running' | 'cycling' = 'running'): Promise<RunState> => {
   const state: RunState = {
     isRunning: true,
     startTime: Date.now(),
     distance: 0,
     movingTime: 0,
     lastTimestamp: Date.now(),
+    activityMode,
     routeCoordinates: [],
     lastLatitude: null,
     lastLongitude: null,
