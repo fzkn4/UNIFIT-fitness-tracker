@@ -14,11 +14,13 @@ import {
   Copy,
   Check,
   Trash2,
-  X
+  X,
+  ExternalLink
 } from 'lucide-react';
 import { auth, realtimeDb } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { ref, onValue, remove, set } from 'firebase/database';
+import { useRouter } from 'next/navigation';
 
 interface Personnel {
   id: string;
@@ -28,6 +30,7 @@ interface Personnel {
 }
 
 export default function PersonnelList() {
+  const router = useRouter();
   const [adminUid, setAdminUid] = useState<string | null>(null);
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
   const [loading, setLoading] = useState(true);
@@ -244,7 +247,20 @@ export default function PersonnelList() {
                         <td className="px-8 py-5 text-slate-400">{formatDate(user.createdAt)}</td>
                         <td className="px-8 py-5 text-right">
                           <button 
-                            onClick={() => handleRemovePersonnel(user.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              router.push(`/dashboard/personnel/${user.id}`);
+                            }}
+                            className="p-2 mr-2 text-slate-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors border border-transparent hover:border-primary/20"
+                            title="View Profile"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                          </button>
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemovePersonnel(user.id);
+                            }}
                             className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors border border-transparent hover:border-red-500/20"
                             title="Remove Personnel"
                           >
