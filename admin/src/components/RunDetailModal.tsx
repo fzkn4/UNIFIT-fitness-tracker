@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef } from 'react';
-import { X, MapPin, Clock, Zap, Flame, Calendar } from 'lucide-react';
+import { X, MapPin, Clock, Zap, Flame, Calendar, Footprints } from 'lucide-react';
 import dynamic from 'next/dynamic';
 
 // Dynamically import map components to avoid SSR issues with Leaflet
@@ -187,11 +187,18 @@ export default function RunDetailModal({ visible, onClose, run }: RunDetailModal
             </div>
 
             {/* Secondary Stats Grid */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-4 gap-4">
+              <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 text-center">
+                <div className="flex items-center justify-center gap-1.5 mb-2">
+                  <Footprints className="w-4 h-4 text-slate-500" />
+                  <p className="text-[10px] uppercase text-slate-500 font-bold tracking-wider">Moving Time</p>
+                </div>
+                <p className="text-xl font-bold text-white">{formatDuration(run.movingTime || 0)}</p>
+              </div>
               <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 text-center">
                 <div className="flex items-center justify-center gap-1.5 mb-2">
                   <Clock className="w-4 h-4 text-slate-500" />
-                  <p className="text-[10px] uppercase text-slate-500 font-bold tracking-wider">Duration</p>
+                  <p className="text-[10px] uppercase text-slate-500 font-bold tracking-wider">Overall Time</p>
                 </div>
                 <p className="text-xl font-bold text-white">{formatDuration(run.duration)}</p>
               </div>

@@ -35,6 +35,7 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
 
       for (const loc of locations) {
         const { latitude, longitude } = loc.coords;
+        const locTimestamp = loc.timestamp || Date.now();
 
         // Calculate incremental distance
         if (state.lastLatitude !== null && state.lastLongitude !== null) {
@@ -45,12 +46,22 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
           // Filter out GPS noise: ignore jumps > 100m in a single update  
           if (dist < 100) {
             state.distance += dist;
+            
+            // Track moving time: if moved > 1m, count the time interval as moving
+            if (dist > 1 && state.lastTimestamp > 0) {
+              const timeDelta = (locTimestamp - state.lastTimestamp) / 1000; // seconds
+              // Cap at 30s to filter out gaps from deferred updates
+              if (timeDelta > 0 && timeDelta < 30) {
+                state.movingTime += timeDelta;
+              }
+            }
           }
         }
 
         state.routeCoordinates.push({ latitude, longitude });
         state.lastLatitude = latitude;
         state.lastLongitude = longitude;
+        state.lastTimestamp = locTimestamp;
       }
 
       await saveRunState(state);

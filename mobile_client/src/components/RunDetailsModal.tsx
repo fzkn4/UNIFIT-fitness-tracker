@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, Dimensions, Platform } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, Dimensions, Platform, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -60,85 +60,92 @@ export default function RunDetailsModal({ visible, onClose, run }: RunDetailsMod
             <View style={{ width: 44 }} /> 
           </View>
 
-          {/* Map Section */}
-          <View style={styles.mapContainer}>
-            {hasRoute ? (
-              <OSMMapView
-                style={styles.map}
-                center={{
-                  latitude: run.route[0].latitude,
-                  longitude: run.route[0].longitude,
-                }}
-                routeCoordinates={run.route}
-                fitRoute={true}
-                interactive={true}
-                zoom={15}
+          <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} bounces={false}>
+            {/* Map Section */}
+            <View style={styles.mapContainer}>
+              {hasRoute ? (
+                <OSMMapView
+                  style={styles.map}
+                  center={{
+                    latitude: run.route[0].latitude,
+                    longitude: run.route[0].longitude,
+                  }}
+                  routeCoordinates={run.route}
+                  fitRoute={true}
+                  interactive={true}
+                  zoom={15}
+                />
+              ) : (
+                  <View style={styles.noRouteContainer}>
+                     <Ionicons name="map-outline" size={48} color={colors.mutedForeground} style={{marginBottom: 16}} />
+                     <Text style={styles.noRouteText}>No GPS route data recorded for this run.</Text>
+                  </View>
+              )}
+              <LinearGradient
+                colors={['transparent', '#111827']}
+                style={styles.mapOverlayBottom}
               />
-            ) : (
-                <View style={styles.noRouteContainer}>
-                   <Ionicons name="map-outline" size={48} color={colors.mutedForeground} style={{marginBottom: 16}} />
-                   <Text style={styles.noRouteText}>No GPS route data recorded for this run.</Text>
-                </View>
-            )}
-            <LinearGradient
-              colors={['transparent', '#111827']}
-              style={styles.mapOverlayBottom}
-            />
-          </View>
-
-          {/* Statistics Section */}
-          <View style={styles.detailsContainer}>
-            <View style={styles.titleRow}>
-               <View>
-                 <Text style={styles.runTitle}>{run.missionTitle ? run.missionTitle : 'Outdoor Run'}</Text>
-                 <Text style={styles.runDate}>{formatActivityDate(run.timestamp)}</Text>
-               </View>
-               <View style={styles.iconBadge}>
-                  <Ionicons name={run.missionId ? "flag" : "walk"} size={24} color={run.missionId ? "#8b5cf6" : colors.primary} />
-               </View>
             </View>
 
-            <View style={styles.statsGrid}>
-              
-              <View style={styles.statMainBox}>
-                <Text style={styles.statMainLabel}>Distance</Text>
-                <Text style={styles.statMainValue}>{(run.distance / 1000).toFixed(2)}</Text>
-                <Text style={styles.statMainUnit}>Kilometers</Text>
+            {/* Statistics Section */}
+            <View style={styles.detailsContainer}>
+              <View style={styles.titleRow}>
+                 <View style={{ flex: 1 }}>
+                   <Text style={styles.runTitle} numberOfLines={1}>{run.missionTitle ? run.missionTitle : 'Outdoor Run'}</Text>
+                   <Text style={styles.runDate}>{formatActivityDate(run.timestamp)}</Text>
+                 </View>
+                 <View style={styles.iconBadge}>
+                    <Ionicons name={run.missionId ? "flag" : "walk"} size={24} color={run.missionId ? "#8b5cf6" : colors.primary} />
+                 </View>
               </View>
 
-              <View style={styles.secondaryStatsContainer}>
-                <View style={styles.statMiniBox}>
-                   <Ionicons name="time-outline" size={16} color={colors.mutedForeground} />
-                   <View style={styles.statMiniTextContainer}>
-                      <Text style={styles.statMiniLabel}>Duration</Text>
-                      <Text style={styles.statMiniValue}>{formatTime(run.duration || run.time)}</Text>
-                   </View>
+              <View style={styles.statsGrid}>
+                
+                <View style={styles.statMainBox}>
+                  <Text style={styles.statMainLabel}>Distance</Text>
+                  <Text style={styles.statMainValue}>{(run.distance / 1000).toFixed(2)}</Text>
+                  <Text style={styles.statMainUnit}>Kilometers</Text>
                 </View>
 
-                <View style={styles.statDivider} />
+                <View style={styles.statsGridSecondary}>
+                  <View style={styles.statTile}>
+                    <View style={styles.statTileIcon}>
+                      <Ionicons name="walk-outline" size={18} color="#38bdf8" />
+                    </View>
+                    <Text style={styles.statTileValue}>{formatTime(run.movingTime || 0)}</Text>
+                    <Text style={styles.statTileLabel}>Moving Time</Text>
+                  </View>
 
-                <View style={styles.statMiniBox}>
-                   <Ionicons name="speedometer-outline" size={16} color={colors.mutedForeground} />
-                   <View style={styles.statMiniTextContainer}>
-                      <Text style={styles.statMiniLabel}>Avg Pace</Text>
-                      <Text style={styles.statMiniValue}>{getRunPace(run)} /km</Text>
-                   </View>
+                  <View style={styles.statTile}>
+                    <View style={[styles.statTileIcon, { backgroundColor: 'rgba(139,92,246,0.1)', borderColor: 'rgba(139,92,246,0.25)' }]}>
+                      <Ionicons name="time-outline" size={18} color="#8b5cf6" />
+                    </View>
+                    <Text style={styles.statTileValue}>{formatTime(run.duration || run.time)}</Text>
+                    <Text style={styles.statTileLabel}>Overall Time</Text>
+                  </View>
+
+                  <View style={styles.statTile}>
+                    <View style={[styles.statTileIcon, { backgroundColor: 'rgba(16,185,129,0.1)', borderColor: 'rgba(16,185,129,0.25)' }]}>
+                      <Ionicons name="speedometer-outline" size={18} color="#10b981" />
+                    </View>
+                    <Text style={styles.statTileValue}>{getRunPace(run)}</Text>
+                    <Text style={styles.statTileLabel}>Avg Pace /km</Text>
+                  </View>
+
+                  <View style={styles.statTile}>
+                    <View style={[styles.statTileIcon, { backgroundColor: 'rgba(249,115,22,0.1)', borderColor: 'rgba(249,115,22,0.25)' }]}>
+                      <Ionicons name="flame-outline" size={18} color="#f97316" />
+                    </View>
+                    <Text style={styles.statTileValue}>{(run.distance * 0.06).toFixed(0)}</Text>
+                    <Text style={styles.statTileLabel}>Calories (kcal)</Text>
+                  </View>
                 </View>
 
-                 <View style={styles.statDivider} />
-
-                <View style={styles.statMiniBox}>
-                   <Ionicons name="flame-outline" size={16} color="#f97316" />
-                   <View style={styles.statMiniTextContainer}>
-                      <Text style={styles.statMiniLabel}>Calories</Text>
-                      <Text style={styles.statMiniValue}>{(run.distance * 0.06).toFixed(0)} kcal</Text>
-                   </View>
-                </View>
               </View>
 
             </View>
-
-          </View>
+            <View style={{ height: 24 }} />
+          </ScrollView>
 
         </View>
       </View>
@@ -278,40 +285,44 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
-  secondaryStatsContainer: {
+  statsGridSecondary: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    width: '100%',
+    marginBottom: 24,
+  },
+  statTile: {
+    width: '47%',
     backgroundColor: 'rgba(30,41,59,0.5)',
     borderRadius: 20,
     padding: 16,
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(51,65,85,0.5)',
-    width: '100%',
   },
-  statMiniBox: {
-    flex: 1,
-    flexDirection: 'row',
+  statTileIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: 'rgba(56,189,248,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(56,189,248,0.25)',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    marginBottom: 10,
   },
-  statMiniTextContainer: {
-    alignItems: 'flex-start',
+  statTileValue: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#fff',
+    marginBottom: 4,
   },
-  statMiniLabel: {
+  statTileLabel: {
     fontSize: 11,
     color: colors.mutedForeground,
+    fontWeight: '600',
     textTransform: 'uppercase',
-    marginBottom: 2,
+    letterSpacing: 0.5,
   },
-  statMiniValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  statDivider: {
-    width: 1,
-    height: '80%',
-    backgroundColor: 'rgba(51,65,85,0.6)',
-    alignSelf: 'center',
-  }
 });

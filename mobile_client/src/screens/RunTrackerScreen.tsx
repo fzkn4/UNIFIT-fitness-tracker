@@ -26,7 +26,8 @@ export default function RunTrackerScreen({ route, navigation }: any) {
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [routeCoordinates, setRouteCoordinates] = useState<any[]>([]);
   const [distance, setDistance] = useState(0); // in meters
-  const [duration, setDuration] = useState(0); // in seconds
+  const [duration, setDuration] = useState(0); // in seconds (overall time)
+  const [movingTime, setMovingTime] = useState(0); // in seconds (moving time)
   const [startTime, setStartTime] = useState(0);
   
   const pollIntervalRef = useRef<any>(null);
@@ -72,6 +73,7 @@ export default function RunTrackerScreen({ route, navigation }: any) {
         const state = await getRunState();
         if (state.isRunning) {
           setDistance(state.distance);
+          setMovingTime(Math.floor(state.movingTime));
           setRouteCoordinates(state.routeCoordinates);
           if (state.routeCoordinates.length > 0) {
             const lastCoord = state.routeCoordinates[state.routeCoordinates.length - 1];
@@ -110,6 +112,7 @@ export default function RunTrackerScreen({ route, navigation }: any) {
       setRouteCoordinates([]);
       setDistance(0);
       setDuration(0);
+      setMovingTime(0);
 
       // Initialize run state in AsyncStorage
       const state = await initRunState(missionId, missionTitle);
@@ -144,6 +147,7 @@ export default function RunTrackerScreen({ route, navigation }: any) {
       
       const finalDist = finalState.distance > 0 ? finalState.distance : Math.random() * 5000 + 1000;
       const finalDuration = duration > 0 ? duration : Math.floor(Math.random() * 1800 + 600);
+      const finalMovingTime = Math.floor(finalState.movingTime || 0);
       const finalRoute = finalState.routeCoordinates;
 
       const distanceKm = finalDist / 1000;
@@ -189,6 +193,7 @@ export default function RunTrackerScreen({ route, navigation }: any) {
         userName: userName,
         distance: finalDist,
         duration: finalDuration,
+        movingTime: finalMovingTime,
         averagePace: finalPaceStr,
         route: finalRoute,
         timestamp: Date.now(),
@@ -309,14 +314,19 @@ export default function RunTrackerScreen({ route, navigation }: any) {
 
           <View style={styles.secondaryStatsRow}>
             <View style={styles.statBox}>
+              <Text style={styles.statValue}>{formatTime(movingTime)}</Text>
+              <Text style={styles.statLabel}>Moving Time</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statBox}>
               <Text style={styles.statValue}>{formatTime(duration)}</Text>
-              <Text style={styles.statLabel}>Duration</Text>
+              <Text style={styles.statLabel}>Overall Time</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statBox}>
               <Text style={styles.statValue}>
-                {distance > 0 && duration > 0 
-                  ? formatTime(duration / (distance / 1000)) 
+                {distance > 0 && movingTime > 0 
+                  ? formatTime(Math.floor(movingTime / (distance / 1000))) 
                   : '--'}
               </Text>
               <Text style={styles.statLabel}>Avg Pace</Text>

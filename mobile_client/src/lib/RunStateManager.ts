@@ -6,6 +6,8 @@ export interface RunState {
   isRunning: boolean;
   startTime: number; // Date.now() when run started
   distance: number; // meters
+  movingTime: number; // seconds of actual movement
+  lastTimestamp: number; // epoch ms of last GPS update
   routeCoordinates: { latitude: number; longitude: number }[];
   lastLatitude: number | null;
   lastLongitude: number | null;
@@ -17,6 +19,8 @@ const DEFAULT_STATE: RunState = {
   isRunning: false,
   startTime: 0,
   distance: 0,
+  movingTime: 0,
+  lastTimestamp: 0,
   routeCoordinates: [],
   lastLatitude: null,
   lastLongitude: null,
@@ -55,6 +59,8 @@ export const initRunState = async (missionId: string | null, missionTitle: strin
     isRunning: true,
     startTime: Date.now(),
     distance: 0,
+    movingTime: 0,
+    lastTimestamp: Date.now(),
     routeCoordinates: [],
     lastLatitude: null,
     lastLongitude: null,

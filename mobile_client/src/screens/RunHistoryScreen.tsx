@@ -120,6 +120,8 @@ export default function RunHistoryScreen({ navigation }: any) {
                 <View style={styles.activityStatsRow}>
                   <Text style={styles.activityStatPrime}>{(Math.round((run.distance / 1000) * 100) / 100).toFixed(2)} km</Text>
                   <Text style={styles.activityStatDivider}>•</Text>
+                  <Text style={styles.activityStatSecondary}>{formatTime(run.movingTime || 0)} mov</Text>
+                  <Text style={styles.activityStatDivider}>•</Text>
                   <Text style={styles.activityStatSecondary}>{formatTime(run.duration || run.time)}</Text>
                   <Text style={styles.activityStatDivider}>•</Text>
                   <Text style={styles.activityStatSecondary}>{getRunPace(run)}/km</Text>
