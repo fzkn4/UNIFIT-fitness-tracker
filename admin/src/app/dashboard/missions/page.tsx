@@ -73,6 +73,7 @@ export default function MissionsAndRoutes() {
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [assignTargetMission, setAssignTargetMission] = useState<Mission | null>(null);
   const [selectedPersonnelIds, setSelectedPersonnelIds] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
@@ -86,6 +87,15 @@ export default function MissionsAndRoutes() {
     });
     return () => unsubscribeAuth();
   }, []);
+
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .substring(0, 2);
+  };
 
   const fetchMissions = (uid: string) => {
     const missionsRef = ref(realtimeDb, 'missions');
@@ -773,6 +783,7 @@ export default function MissionsAndRoutes() {
                 onClick={() => {
                   setIsAssignModalOpen(false);
                   setAssignTargetMission(null);
+                  setSearchQuery('');
                 }}
                 className="text-slate-400 hover:text-white p-2 hover:bg-slate-800 rounded-xl transition-colors"
               >
@@ -780,61 +791,167 @@ export default function MissionsAndRoutes() {
               </button>
             </div>
 
-            <div className="p-6 overflow-y-auto flex-1">
-              {personnelList.length === 0 ? (
-                <div className="text-center py-8 text-slate-400">
-                  <p>You don't have any registered personnel yet.</p>
+            <div className="px-6 pt-6 pb-2">
+              <div className="relative mb-4">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Search className="h-5 w-5 text-slate-400" />
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  {personnelList.map(person => (
-                    <label 
-                      key={person.id} 
-                      className={`flex items-center p-3 rounded-xl cursor-pointer border transition-all ${
-                        selectedPersonnelIds.includes(person.id)
-                          ? 'border-primary bg-primary/10'
-                          : 'border-slate-800 bg-slate-900 hover:border-slate-700'
-                      }`}
-                    >
-                      <input 
-                        type="checkbox"
-                        checked={selectedPersonnelIds.includes(person.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedPersonnelIds(prev => [...prev, person.id]);
+                <input
+                  type="text"
+                  placeholder="Search by name or email..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-900 border border-slate-700/50 rounded-xl text-sm focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none"
+                />
+              </div>
+              
+              {(() => {
+                const filteredPersonnel = personnelList.filter(p => 
+                  p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                  p.email.toLowerCase().includes(searchQuery.toLowerCase())
+                );
+                const allFilteredSelected = filteredPersonnel.length > 0 && 
+                  filteredPersonnel.every(p => selectedPersonnelIds.includes(p.id));
+
+                return (
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+                      {filteredPersonnel.length} {filteredPersonnel.length === 1 ? 'Person' : 'People'}
+                    </span>
+                    {filteredPersonnel.length > 0 && (
+                      <button
+                        onClick={() => {
+                          if (allFilteredSelected) {
+                            // Deselect all filtered
+                            setSelectedPersonnelIds(prev => 
+                              prev.filter(id => !filteredPersonnel.some(p => p.id === id))
+                            );
                           } else {
-                            setSelectedPersonnelIds(prev => prev.filter(id => id !== person.id));
+                            // Select all filtered
+                            const filteredIds = filteredPersonnel.map(p => p.id);
+                            setSelectedPersonnelIds(prev => 
+                              [...new Set([...prev, ...filteredIds])]
+                            );
                           }
                         }}
-                        className="w-5 h-5 rounded border-slate-700 text-primary focus:ring-primary focus:ring-offset-slate-900 bg-slate-800"
-                      />
-                      <div className="ml-3">
-                        <p className="text-sm font-medium text-white">{person.name}</p>
-                        <p className="text-xs text-slate-400">{person.email}</p>
-                      </div>
-                    </label>
-                  ))}
-                </div>
-              )}
+                        className="text-xs font-semibold text-primary hover:text-[#38bdf8] transition-colors"
+                      >
+                        {allFilteredSelected ? 'Deselect All' : 'Select All'}
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
-            <div className="flex gap-3 p-6 border-t border-slate-800 bg-slate-900">
-              <button 
-                onClick={() => {
-                  setIsAssignModalOpen(false);
-                  setAssignTargetMission(null);
-                }}
-                className="flex-1 px-4 py-2.5 rounded-xl font-semibold text-white bg-slate-800 hover:bg-slate-700 transition-colors"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={handleSaveAssignments}
-                disabled={personnelList.length === 0}
-                className="flex-1 px-4 py-2.5 rounded-xl font-semibold text-white bg-gradient-to-r from-primary to-[#0284c7] hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Save Assignments
-              </button>
+            <div className="px-6 pb-6 overflow-y-auto flex-1">
+              {(() => {
+                const filteredPersonnel = personnelList.filter(p => 
+                  p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                  p.email.toLowerCase().includes(searchQuery.toLowerCase())
+                );
+
+                if (personnelList.length === 0) {
+                  return (
+                    <div className="text-center py-10 bg-slate-900/50 rounded-xl border border-slate-800/50">
+                      <Users className="w-10 h-10 text-slate-500 mx-auto mb-3 opacity-50" />
+                      <p className="text-slate-400 font-medium">No registered personnel yet.</p>
+                      <p className="text-sm text-slate-500 mt-1">Add personnel from the dashboard first.</p>
+                    </div>
+                  );
+                }
+
+                if (filteredPersonnel.length === 0) {
+                  return (
+                    <div className="text-center py-10 bg-slate-900/50 rounded-xl border border-slate-800/50">
+                      <Search className="w-10 h-10 text-slate-500 mx-auto mb-3 opacity-50" />
+                      <p className="text-slate-400 font-medium">No results found for "{searchQuery}"</p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="space-y-2">
+                    {filteredPersonnel.map((person, index) => {
+                      const isSelected = selectedPersonnelIds.includes(person.id);
+                      // Generate a consistent color based on the person's name length or index
+                      const colorIndex = (person.name.length + index) % 5;
+                      const avatarColors = [
+                        'bg-blue-500/20 text-blue-400 border-blue-500/30',
+                        'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+                        'bg-purple-500/20 text-purple-400 border-purple-500/30',
+                        'bg-amber-500/20 text-amber-400 border-amber-500/30',
+                        'bg-rose-500/20 text-rose-400 border-rose-500/30',
+                      ];
+                      
+                      return (
+                        <label 
+                          key={person.id} 
+                          className={`flex items-center p-3 rounded-xl cursor-pointer border transition-all duration-200 ${
+                            isSelected
+                              ? 'border-primary/50 bg-primary/10 shadow-[0_0_15px_rgba(2,132,199,0.15)]'
+                              : 'border-slate-800 bg-slate-900 hover:border-slate-700 hover:bg-slate-800/50'
+                          }`}
+                        >
+                          <div className="relative flex items-center justify-center w-5 h-5 mr-4">
+                            <input 
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedPersonnelIds(prev => [...prev, person.id]);
+                                } else {
+                                  setSelectedPersonnelIds(prev => prev.filter(id => id !== person.id));
+                                }
+                              }}
+                              className="peer w-5 h-5 rounded border-slate-600 text-primary focus:ring-primary focus:ring-offset-slate-900 bg-slate-800 cursor-pointer transition-colors"
+                            />
+                            {/* Custom subtle checkmark overlay if we wanted, but default tailwind handles it okay */}
+                          </div>
+                          
+                          <div className={`w-10 h-10 rounded-full border flex items-center justify-center font-bold text-sm ${avatarColors[colorIndex]} mr-3`}>
+                            {getInitials(person.name)}
+                          </div>
+                          
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-sm font-semibold truncate transition-colors ${isSelected ? 'text-white' : 'text-slate-200'}`}>
+                              {person.name}
+                            </p>
+                            <p className="text-xs text-slate-500 truncate">{person.email}</p>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3 p-6 border-t border-slate-800 bg-slate-900/80 backdrop-blur-sm">
+              <div className="flex-1 flex items-center justify-center sm:justify-start mb-3 sm:mb-0">
+                <span className="text-sm font-medium text-slate-400">
+                  <span className="text-white font-bold">{selectedPersonnelIds.length}</span> personnel selected
+                </span>
+              </div>
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => {
+                    setIsAssignModalOpen(false);
+                    setAssignTargetMission(null);
+                    setSearchQuery('');
+                  }}
+                  className="px-5 py-2.5 rounded-xl font-medium text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleSaveAssignments}
+                  disabled={personnelList.length === 0}
+                  className="px-6 py-2.5 rounded-xl font-semibold text-white bg-primary hover:bg-[#0284c7] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_4px_15px_rgba(2,132,199,0.3)] hover:shadow-[0_4px_20px_rgba(2,132,199,0.5)]"
+                >
+                  Save Assignments
+                </button>
+              </div>
             </div>
           </div>
         </div>
