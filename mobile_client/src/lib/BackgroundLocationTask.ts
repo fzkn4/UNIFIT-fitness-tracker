@@ -1,5 +1,6 @@
 import * as TaskManager from 'expo-task-manager';
 import * as Location from 'expo-location';
+import { Platform, PermissionsAndroid } from 'react-native';
 import { getRunState, saveRunState } from './RunStateManager';
 
 export const BACKGROUND_LOCATION_TASK = 'unifit-background-location';
@@ -60,15 +61,36 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
 });
 
 export const startBackgroundTracking = async (): Promise<void> => {
-  // Request background location permission
+  // Request foreground location permission
   const { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
   if (fgStatus !== 'granted') {
     throw new Error('Foreground location permission not granted');
   }
 
+  // Request background location permission
   const { status: bgStatus } = await Location.requestBackgroundPermissionsAsync();
   if (bgStatus !== 'granted') {
     console.warn('Background location permission not granted — tracking will pause in background');
+  }
+
+  // Android 13+ (API 33): Request POST_NOTIFICATIONS permission for the foreground service notification
+  if (Platform.OS === 'android' && Platform.Version >= 33) {
+    try {
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
+        {
+          title: 'Notification Permission',
+          message: 'Unifit needs notification access to show your active run status.',
+          buttonPositive: 'Allow',
+          buttonNegative: 'Deny',
+        }
+      );
+      if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+        console.warn('POST_NOTIFICATIONS permission denied — notification banner may not appear');
+      }
+    } catch (e) {
+      console.warn('Error requesting notification permission:', e);
+    }
   }
 
   // Check if already running
@@ -87,6 +109,7 @@ export const startBackgroundTracking = async (): Promise<void> => {
       notificationTitle: 'Unifit — Recording Run',
       notificationBody: 'Your run is being tracked. Tap to return to the app.',
       notificationColor: '#38bdf8',
+      killServiceOnDestroy: false,
     },
   });
 };
