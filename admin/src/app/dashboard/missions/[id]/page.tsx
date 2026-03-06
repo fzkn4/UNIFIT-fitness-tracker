@@ -103,7 +103,13 @@ export default function MissionProgress() {
       if (personnelSnap.exists()) {
         personnelSnap.forEach((child) => {
           if (personnelIds.includes(child.key)) {
-             allPersonnel.push({ id: child.key, ...child.val() } as Personnel);
+            const val = child.val();
+             allPersonnel.push({ 
+               id: child.key, 
+               ...val,
+               name: val.fullName || val.name || '', 
+               email: val.email || '',
+             } as Personnel);
           }
         });
       }

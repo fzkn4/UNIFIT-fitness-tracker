@@ -116,6 +116,8 @@ export default function MissionsAndRoutes() {
           .map((key) => ({
             id: key,
             ...data[key],
+            name: data[key].fullName || data[key].name || '',
+            email: data[key].email || '',
           }))
           .filter((user: any) => user.adminId === uid);
         setPersonnelList(adminPersonnel);
