@@ -12,12 +12,16 @@ import {
   Repeat,
   ChevronDown,
   ChevronUp,
-  Award
+  Award,
+  Timer,
+  CheckCircle,
+  XCircle
 } from 'lucide-react';
 import { auth, realtimeDb } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { ref, onValue, get } from 'firebase/database';
 import RunDetailModal from '@/components/RunDetailModal';
+import { getCurrentPeriodBounds, getPeriodLabel, getTimeUntilReset, getHistoricalPeriods, filterRunsByPeriod } from '@/lib/periodUtils';
 
 interface Mission {
   id: string;
@@ -256,19 +260,37 @@ export default function MissionProgress() {
           ) : (
             <div className="space-y-4">
               {assignedUsers.map(user => {
-                // Calculate their specific stats for this mission
-                const userRuns = missionRuns.filter(r => r.userId === user.id);
-                const totalMeters = userRuns.reduce((sum, run) => sum + (run.distance || 0), 0);
-                const totalKm = totalMeters / 1000;
+                const isRecurring = mission.routineType !== 'once';
+                const periodBounds = getCurrentPeriodBounds(mission.routineType);
+                const periodLabel = getPeriodLabel(mission.routineType);
                 const targetKm = mission.targetDistance || 0;
-                
-                let progressPercentage = targetKm > 0 ? (totalKm / targetKm) * 100 : 0;
-                if (progressPercentage > 100) progressPercentage = 100;
 
-                const isCompleted = totalKm >= targetKm && targetKm > 0;
-                const isStarted = totalKm > 0;
+                // All runs for this user on this mission
+                const allUserRuns = missionRuns.filter(r => r.userId === user.id);
+                
+                // Current period runs (filtered for recurring, all for once)
+                const periodRuns = isRecurring 
+                  ? allUserRuns.filter(r => r.timestamp >= periodBounds.start && r.timestamp < periodBounds.end)
+                  : allUserRuns;
+                
+                const periodMeters = periodRuns.reduce((sum, run) => sum + (run.distance || 0), 0);
+                const periodKm = periodMeters / 1000;
+                
+                let progressPercentage = targetKm > 0 ? (periodKm / targetKm) * 100 : 0;
+                if (progressPercentage > 100) progressPercentage = 100;
+                const isCompleted = periodKm >= targetKm && targetKm > 0;
+                const isStarted = periodKm > 0;
+                const attemptCount = periodRuns.length;
                 
                 const isExpanded = expandedUsers.includes(user.id);
+
+                // Historical periods for recurring
+                const history = isRecurring ? getHistoricalPeriods(mission.routineType, mission.createdAt, 5) : [];
+                const historyItems = history.map(h => {
+                  const hRuns = allUserRuns.filter(r => r.timestamp >= h.bounds.start && r.timestamp < h.bounds.end);
+                  const hDist = hRuns.reduce((sum, r) => sum + (r.distance || 0), 0) / 1000;
+                  return { ...h, distance: hDist, complete: hDist >= targetKm && targetKm > 0, attempts: hRuns.length };
+                }).filter(h => h.attempts > 0 || h.bounds.end < Date.now());
 
                 return (
                   <div key={user.id} className="bg-[#111827]/80 rounded-2xl border border-slate-800/80 overflow-hidden shadow-lg transition-all">
@@ -290,9 +312,12 @@ export default function MissionProgress() {
                       {/* Progress Summary Area */}
                       <div className="flex-1 max-w-sm px-4">
                         <div className="flex justify-between text-xs mb-1.5">
-                          <span className="font-semibold text-slate-400">Progress</span>
+                          <span className="font-semibold text-slate-400">
+                            {isRecurring ? periodLabel : 'Progress'}
+                            {isRecurring && attemptCount > 0 ? ` · ${attemptCount} attempt${attemptCount > 1 ? 's' : ''}` : ''}
+                          </span>
                           <span className="font-bold text-white">
-                            {(Math.round(totalKm * 100) / 100).toFixed(2)} / {targetKm} km
+                            {(Math.round(periodKm * 100) / 100).toFixed(2)} / {targetKm} km
                           </span>
                         </div>
                         <div className="h-2.5 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
@@ -334,18 +359,45 @@ export default function MissionProgress() {
                     {/* Expandable Run History Area */}
                     {isExpanded && (
                       <div className="bg-slate-900/50 border-t border-slate-800/80 p-5 px-6">
+                        {/* Period History Summary (recurring only) */}
+                        {isRecurring && historyItems.length > 0 && (
+                          <div className="mb-5">
+                            <h4 className="text-sm font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-2 mb-3">
+                              <Timer className="w-4 h-4 text-purple-400" />
+                              Past Periods
+                            </h4>
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
+                              {historyItems.slice(0, 5).map((h, idx) => (
+                                <div key={idx} className={`p-3 rounded-xl border text-center ${
+                                  h.complete 
+                                    ? 'bg-emerald-500/5 border-emerald-500/20' 
+                                    : 'bg-red-500/5 border-red-500/20'
+                                }`}>
+                                  <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">{h.label}</p>
+                                  <div className="flex items-center justify-center gap-1">
+                                    {h.complete ? <CheckCircle className="w-3.5 h-3.5 text-emerald-400" /> : <XCircle className="w-3.5 h-3.5 text-red-400" />}
+                                    <span className={`text-sm font-bold ${h.complete ? 'text-emerald-400' : 'text-red-400'}`}>
+                                      {h.distance.toFixed(1)} km
+                                    </span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
                         <h4 className="text-sm font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-2 mb-4">
                           <Activity className="w-4 h-4 text-primary" />
-                          Historical Attempts
+                          {isRecurring ? 'Current Period Attempts' : 'Historical Attempts'}
                         </h4>
                         
-                        {userRuns.length === 0 ? (
+                        {periodRuns.length === 0 ? (
                           <div className="py-6 text-center text-slate-500 text-sm italic">
-                            No runs recorded for this mission yet.
+                            No runs recorded {isRecurring ? 'for this period' : 'for this mission'} yet.
                           </div>
                         ) : (
                           <div className="space-y-3">
-                            {userRuns.map((run, idx) => (
+                            {periodRuns.map((run, idx) => (
                               <div 
                                 key={run.id} 
                                 className="flex items-center justify-between p-3.5 bg-[#111827] rounded-xl border border-slate-800/80 cursor-pointer hover:border-slate-700 hover:bg-slate-800/40 transition-all"
@@ -357,7 +409,7 @@ export default function MissionProgress() {
                               >
                                 <div className="flex items-center gap-4">
                                   <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">
-                                    #{userRuns.length - idx}
+                                    #{periodRuns.length - idx}
                                   </div>
                                   <div>
                                     <p className="font-semibold text-sm text-slate-200">{formatDate(run.timestamp)}</p>
