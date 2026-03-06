@@ -45,7 +45,9 @@ export default function RunTrackerScreen({ route, navigation }: any) {
         return;
       }
 
-      let initialLocation = await Location.getCurrentPositionAsync({});
+      let initialLocation = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.BestForNavigation
+      });
       setLocation(initialLocation);
     })();
 

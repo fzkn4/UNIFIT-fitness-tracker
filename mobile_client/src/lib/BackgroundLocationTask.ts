@@ -34,8 +34,13 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
       if (!state.isRunning) return;
 
       for (const loc of locations) {
-        const { latitude, longitude } = loc.coords;
+        const { latitude, longitude, accuracy } = loc.coords;
         const locTimestamp = loc.timestamp || Date.now();
+
+        // 1. Filter out poor accuracy points (e.g., > 15 meters error radius)
+        if (accuracy && accuracy > 15) {
+          continue; // Skip this point, it's too inaccurate
+        }
 
         // Calculate incremental distance
         if (state.lastLatitude !== null && state.lastLongitude !== null) {
@@ -43,25 +48,34 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
             state.lastLatitude, state.lastLongitude,
             latitude, longitude
           );
-          // Filter out GPS noise: ignore jumps > 100m in a single update  
-          if (dist < 100) {
+          
+          // 2. Filter out GPS micro-jitter: ignore movements < 1.5 meters
+          // 3. Filter out massive impossible jumps > 100m in a single update
+          if (dist >= 1.5 && dist < 100) {
             state.distance += dist;
             
-            // Track moving time: if moved > 1m, count the time interval as moving
-            if (dist > 1 && state.lastTimestamp > 0) {
+            // Track moving time: count the time interval as moving
+            if (state.lastTimestamp > 0) {
               const timeDelta = (locTimestamp - state.lastTimestamp) / 1000; // seconds
-              // Cap at 30s to filter out gaps from deferred updates
+              // Cap at 30s to filter out gaps from deferred updates or signal loss
               if (timeDelta > 0 && timeDelta < 30) {
                 state.movingTime += timeDelta;
               }
             }
-          }
-        }
 
-        state.routeCoordinates.push({ latitude, longitude });
-        state.lastLatitude = latitude;
-        state.lastLongitude = longitude;
-        state.lastTimestamp = locTimestamp;
+            // Only push coordinates and update last point if we moved enough
+            state.routeCoordinates.push({ latitude, longitude });
+            state.lastLatitude = latitude;
+            state.lastLongitude = longitude;
+            state.lastTimestamp = locTimestamp;
+          }
+        } else {
+          // First point: just save it
+          state.routeCoordinates.push({ latitude, longitude });
+          state.lastLatitude = latitude;
+          state.lastLongitude = longitude;
+          state.lastTimestamp = locTimestamp;
+        }
       }
 
       await saveRunState(state);
@@ -111,9 +125,9 @@ export const startBackgroundTracking = async (): Promise<void> => {
   }
 
   await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
-    accuracy: Location.Accuracy.High,
+    accuracy: Location.Accuracy.BestForNavigation,
     timeInterval: 2000,
-    distanceInterval: 1,
+    distanceInterval: 1, // We filter at 1.5m in code, but request updates softly here
     deferredUpdatesInterval: 1000,
     showsBackgroundLocationIndicator: true,
     foregroundService: {
